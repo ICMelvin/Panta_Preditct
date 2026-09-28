@@ -9,11 +9,14 @@ from pydantic import BaseModel
 
 class QuestionSubmission(BaseModel):
     question: str
-    source: Optional[str] = None
-    deadline: Optional[str] = None
+    resolution_rule: str
+    sources_of_truth: list[str]
     description: Optional[str] = None
     image_url: Optional[str] = None
     category: Optional[str] = None
+    start_time: Optional[int] = None
+    end_time: Optional[int] = None
+    resolution_time: Optional[int] = None
 
 
 class QuoteRequest(QuestionSubmission):
@@ -21,10 +24,10 @@ class QuoteRequest(QuestionSubmission):
 
 
 class BuildRequest(BaseModel):
-    quote_id: str
-    creator_wallet: str
+    create_id: str
+    wallet: str
 
 
 class RegisterRequest(BaseModel):
-    build_id: str
-    signed_transaction: str
+    create_id: str
+    signature: str

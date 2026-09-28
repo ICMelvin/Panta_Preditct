@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PantaPredict</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  <script src="https://unpkg.com/bs58@5.0.0/dist/bs58.min.js"></script>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -14,17 +16,46 @@
     <form id="create-form">
       <label>
         Question
-        <input type="text" id="question" required />
+        <input type="text" id="question" required placeholder="Will Bitcoin reach $100k by end of 2026?" />
       </label>
 
       <label>
-        Deadline
-        <input type="date" id="deadline" required />
+        Resolution Rule
+        <textarea id="resolution_rule" required placeholder="How will this be resolved? (e.g., Bitcoin reaches $100,000 USD at any point before December 31, 2026, according to CoinMarketCap data)"></textarea>
       </label>
 
       <label>
-        Source (URL)
-        <input type="url" id="source" required />
+        Sources of Truth (URLs, one per line)
+        <textarea id="sources_of_truth" required placeholder="https://coinmarketcap.com&#10;https://coingecko.com"></textarea>
+      </label>
+
+      <label>
+        Category
+        <select id="category" required>
+          <option value="">Loading categories...</option>
+        </select>
+      </label>
+
+      <label>
+        Image
+        <select id="image_select">
+          <option value="">Select an image</option>
+          <option value="https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=400">Bitcoin/Crypto</option>
+          <option value="https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400">Sports</option>
+          <option value="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=400">Politics</option>
+          <option value="https://images.unsplash.com/photo-1611974765270-ca1258634369?w=400">Technology</option>
+        </select>
+        <input type="url" id="image_url" placeholder="Or enter custom image URL" />
+      </label>
+
+      <label>
+        End Date
+        <input type="date" id="end_date" required />
+      </label>
+
+      <label>
+        Resolution Date
+        <input type="date" id="resolution_date" required />
       </label>
 
       <div id="quality-checks"></div>
@@ -36,7 +67,9 @@
     </form>
 
     <section id="market-view" hidden>
-      <!-- Layer 6: populated when opened via a "Trade" button -->
+      <h2>Market Details</h2>
+      <div id="market-details"></div>
+      <button id="back-btn">Back to create</button>
     </section>
   </main>
 

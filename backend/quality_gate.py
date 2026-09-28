@@ -18,21 +18,27 @@ from dataclasses import dataclass, field
 
 _URL_RE = re.compile(r"https?://\S+")
 
-# Very rough first-pass deadline detector. Tighten this as you see real
-# questions come through — dates, "by <weekday>", "this week", etc.
+# Improved deadline detector with support for ISO dates, various date formats,
+# month names, and relative deadlines like "end of 2026"
+_MONTHS = (
+    r"jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?"
+    r"|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?"
+)
 _DEADLINE_HINTS = re.compile(
-    r"\b(by|before|on)\s+"
-    r"(\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?"
-    r"|\d{4}[/-]\d{1,2}[/-]\d{1,2}"  # ISO dates like 2026-12-31
+    r"\b(by|before|on|until|through)\s+(the\s+)?"
+    r"("
+    r"\d{4}-\d{1,2}-\d{1,2}"
+    r"|\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?"
+    r"|\d{1,2}(st|nd|rd|th)?\s+(" + _MONTHS + r")\b"
+    r"|(" + _MONTHS + r")\b"
     r"|monday|tuesday|wednesday|thursday|friday|saturday|sunday"
-    r"|january|february|march|april|may|june|july|august|september"
-    r"|october|november|december"
-    r"|end of (day|week|month|year)|eod|eow|eom|eoy)",
+    r"|end\s+of\s+(the\s+)?(day|week|month|year|quarter|\d{4})|eod|eow|eom|eoy"
+    r")",
     re.IGNORECASE,
 )
 
 _NAMED_SOURCE_HINTS = re.compile(
-    r"\b(according to|per|source:|via)", re.IGNORECASE
+    r"\b(according to|per|source:|via)\b", re.IGNORECASE
 )
 
 _BINARY_HINTS = re.compile(r"^\s*will\b.*\?", re.IGNORECASE)
@@ -79,9 +85,10 @@ def check_deadline(question: str) -> CheckResult:
 
 
 def check_source(question: str, source_field: str | None = None) -> CheckResult:
-    # A structured `source` field (e.g. entered separately in the Mini App)
+    # A structured `sources_of_truth` field (e.g. entered separately in the Mini App)
     # always wins over trying to parse one out of free text.
-    if source_field and (_URL_RE.search(source_field) or len(source_field.strip()) > 0):
+    # Note: source_field can be a string (single source) or we handle the first item if it's from sources_of_truth
+    if source_field and (_URL_RE.search(source_field) or len(str(source_field).strip()) > 0):
         return CheckResult(True, "Source provided.")
     if _URL_RE.search(question) or _NAMED_SOURCE_HINTS.search(question):
         return CheckResult(True, "Source reference found in question text.")

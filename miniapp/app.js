@@ -1,109 +1,96 @@
 // Layer 5 — Mini App logic.
-// Reads pre-filled question from Telegram's start_param and implements
-// the full quote -> build -> sign -> register flow with wallet connection.
+// Robust error handling and optional dependencies
 
 const tg = window.Telegram?.WebApp;
-tg?.ready();
-tg?.expand();
-
 const API_BASE = ""; // same-origin, backend serves this file too
 
+// DOM elements - get them first
 const form = document.getElementById("create-form");
 const checkBtn = document.getElementById("check-btn");
 const connectBtn = document.getElementById("connect-btn");
 const checksEl = document.getElementById("quality-checks");
-const questionInput = document.getElementById("question");
-const deadlineInput = document.getElementById("deadline");
-const sourceInput = document.getElementById("source");
+const categorySelect = document.getElementById("category");
+const imageSelect = document.getElementById("image_select");
+const imageUrlInput = document.getElementById("image_url");
+const marketView = document.getElementById("market-view");
+const marketDetails = document.getElementById("market-details");
+const backBtn = document.getElementById("back-btn");
 
+// State
 let lastGatePassed = false;
-let currentQuote = null;
-let currentBuild = null;
+let currentCreateId = null;
+let connectedWallet = null;
+let categories = [];
 
-// Pre-fill question from Telegram start_param (Layer 6)
-function prefillFromTelegram() {
-  const startParam = tg?.initDataUnsafe?.start_param;
-  if (startParam) {
-    try {
-      // Decode URL-encoded parameter
-      const question = decodeURIComponent(startParam);
-      questionInput.value = question;
-      // Auto-trigger quality check
-      checkBtn.click();
-    } catch (e) {
-      console.error("Failed to decode start_param:", e);
-    }
+// Error tracking
+const errors = [];
+let debugMode = false;
+
+// Global error handlers
+window.onerror = function(message, source, lineno, colno, error) {
+  const errorInfo = `${message} (${source}:${lineno})`;
+  errors.push(errorInfo);
+  showErrorBanner(errorInfo);
+  if (debugMode) updateDebugPanel();
+  console.error(error);
+};
+
+window.addEventListener('unhandledrejection', function(event) {
+  const errorInfo = `Promise rejected: ${event.reason}`;
+  errors.push(errorInfo);
+  showErrorBanner(errorInfo);
+  if (debugMode) updateDebugPanel();
+  console.error(event.reason);
+});
+
+// Show error banner
+function showErrorBanner(message) {
+  let banner = document.getElementById('error-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'error-banner';
+    banner.style.cssText = 'background: #fee; color: #c33; padding: 10px; margin: 10px 0; border: 1px solid #c33; display: none;';
+    document.body.insertBefore(banner, document.body.firstChild);
   }
+  banner.textContent = `Error: ${message}`;
+  banner.style.display = 'block';
 }
 
-// Run on load
-prefillFromTelegram();
-
-// Check if opened with market parameter for trading view (Layer 6)
-function checkForMarketView() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const marketId = urlParams.get('market');
-  
-  if (marketId) {
-    showMarketView(marketId);
+// Update debug panel
+function updateDebugPanel() {
+  let panel = document.getElementById('debug-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'debug-panel';
+    panel.style.cssText = 'position: fixed; bottom: 0; right: 0; background: #333; color: #fff; padding: 10px; max-width: 300px; max-height: 200px; overflow-y: auto; font-size: 12px; z-index: 9999;';
+    document.body.appendChild(panel);
   }
+
+  let html = '<strong>Debug Panel</strong><br>';
+  html += `API Base: ${API_BASE}<br>`;
+  html += `Errors (${errors.length}):<br>`;
+  errors.slice(-5).forEach(err => {
+    html += `- ${err}<br>`;
+  });
+  html += `<br>Categories: ${categories.join(', ')}`;
+  panel.innerHTML = html;
 }
 
-function showMarketView(marketId) {
-  form.style.display = 'none';
-  checkBtn.style.display = 'none';
-  connectBtn.style.display = 'none';
-  
-  document.querySelector('h1').textContent = 'Trade Market';
-  
-  // Fetch market data and display trading view
-  fetchMarketData(marketId);
-}
-
-async function fetchMarketData(marketId) {
-  try {
-    const res = await fetch(`${API_BASE}/api/markets/${marketId}`);
-    if (!res.ok) throw new Error('Failed to fetch market');
-    
-    const market = await res.json();
-    renderMarketView(market);
-  } catch (error) {
-    console.error('Failed to fetch market:', error);
-    checksEl.innerHTML = `<div class="check-fail">❌ Failed to load market: ${error.message}</div>`;
-  }
-}
-
-function renderMarketView(market) {
-  const yesPrice = market.yesPrice !== null ? `${(market.yesPrice * 100).toFixed(1)}%` : 'No price yet';
-  
-  checksEl.innerHTML = `
-    <div style="padding: 16px; background: var(--tg-theme-secondary-bg-color, #f5f5f5); border-radius: 8px;">
-      <h3 style="margin: 0 0 12px 0; font-size: 16px;">${market.question || 'Loading...'}</h3>
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
-          <div style="font-size: 12px; opacity: 0.7;">Current Yes Price</div>
-          <div style="font-size: 24px; font-weight: bold; color: #1a9e4a;">${yesPrice}</div>
-        </div>
-        <button onclick="tg?.close()" style="padding: 8px 16px; font-size: 14px;">
-          Close
-        </button>
-      </div>
-    </div>
-  `;
-}
-
-// Check for market view on load
-checkForMarketView();
-
+// Attach DOM event listeners FIRST (before any optional work)
 checkBtn.addEventListener("click", async () => {
-  const question = questionInput.value;
-  const source = sourceInput.value;
+  const question = document.getElementById("question").value;
+  const sourcesText = document.getElementById("sources_of_truth").value;
+  const sources = sourcesText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
 
   try {
     const res = await fetch(`${API_BASE}/api/quality-check`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, source }),
+      body: JSON.stringify({
+        question,
+        resolution_rule: document.getElementById("resolution_rule").value,
+        sources_of_truth: sources,
+      }),
     });
     const data = await res.json();
 
@@ -111,11 +98,161 @@ checkBtn.addEventListener("click", async () => {
     lastGatePassed = data.passed;
     connectBtn.disabled = !data.passed;
   } catch (error) {
-    console.error("Quality check failed:", error);
-    showError("Failed to check question quality");
+    showErrorBanner(`Quality check failed: ${error.message}`);
+    console.error("Quality check error:", error);
   }
 });
 
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!lastGatePassed) return;
+
+  try {
+    connectBtn.disabled = true;
+    connectBtn.textContent = "Creating market...";
+
+    // 1. Get a quote from POST /api/quote
+    const question = document.getElementById("question").value;
+    const resolutionRule = document.getElementById("resolution_rule").value;
+    const sourcesText = document.getElementById("sources_of_truth").value;
+    const sourcesOfTruth = sourcesText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+    const category = document.getElementById("category").value;
+    const imageUrl = imageUrlInput.value || imageSelect.value || null;
+    const endDate = document.getElementById("end_date").value;
+    const resolutionDate = document.getElementById("resolution_date").value;
+
+    // Convert dates to unix timestamps
+    const endTime = new Date(endDate).getTime() / 1000;
+    const resolutionTime = new Date(resolutionDate).getTime() / 1000;
+    const startTime = Math.floor(Date.now() / 1000);
+
+    const quoteRes = await fetch(`${API_BASE}/api/quote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        resolution_rule: resolutionRule,
+        sources_of_truth: sourcesOfTruth,
+        category,
+        image_url: imageUrl,
+        start_time: startTime,
+        end_time: endTime,
+        resolution_time: resolutionTime,
+      }),
+    });
+
+    if (!quoteRes.ok) {
+      const error = await quoteRes.json();
+      throw new Error(error.detail || "Quote request failed");
+    }
+
+    const quoteData = await quoteRes.json();
+    currentCreateId = quoteData.createId;
+
+    // 2. Connect wallet using Phantom deep link
+    if (!window.solana || !window.solana.isPhantom) {
+      // Open Phantom deep link if wallet not connected
+      const dappUrl = window.location.href;
+      const phantomLink = `https://phantom.app/ul/browse/${encodeURIComponent(dappUrl)}?ref=${encodeURIComponent(dappUrl)}`;
+      window.open(phantomLink, "_blank");
+      throw new Error("Phantom wallet not connected. Please install Phantom, connect it, and try again.");
+    }
+
+    let resp;
+    try {
+      resp = await window.solana.connect();
+    } catch (connectError) {
+      throw new Error("Wallet connection cancelled or failed. Please connect your Phantom wallet and try again.");
+    }
+    connectedWallet = resp.publicKey.toString();
+
+    // 3. Call POST /api/build with the connected wallet address
+    const buildRes = await fetch(`${API_BASE}/api/build`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        create_id: currentCreateId,
+        wallet: connectedWallet,
+      }),
+    });
+
+    if (!buildRes.ok) {
+      const error = await buildRes.json();
+      throw new Error(error.detail || "Build request failed");
+    }
+
+    const buildData = await buildRes.json();
+
+    // 4. Have the wallet sign the returned unsigned transaction
+    // Note: The transaction is base64 encoded from Panta
+    if (!buildData.transaction) {
+      throw new Error("No transaction returned from build step");
+    }
+
+    // Decode base64 transaction
+    const transactionBytes = Uint8Array.from(atob(buildData.transaction), c => c.charCodeAt(0));
+
+    // Sign using Phantom's signTransaction method
+    const signedTransaction = await window.solana.signTransaction(transactionBytes);
+    const signature = bs58.encode(signedTransaction.signature);
+
+    // 5. Call POST /api/register with the signature
+    const registerRes = await fetch(`${API_BASE}/api/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        create_id: currentCreateId,
+        signature: signature,
+      }),
+    });
+
+    if (!registerRes.ok) {
+      const error = await registerRes.json();
+      throw new Error(error.detail || "Register request failed");
+    }
+
+    const registerData = await registerRes.json();
+
+    // 6. Show confirmation
+    alert(`Market created successfully!\n\nCreate ID: ${currentCreateId}\nWallet: ${connectedWallet}\n\nUse /trade ${currentCreateId} in Telegram to view market details.`);
+
+    tg?.close();
+
+  } catch (error) {
+    console.error("Market creation failed:", error);
+    let errorMessage = error.message;
+    
+    // Provide more specific error messages for common failures
+    if (error.message.includes("Phantom wallet not connected")) {
+      errorMessage = "Phantom wallet not connected. Please install Phantom wallet, connect it, and try again.";
+    } else if (error.message.includes("Wallet connection cancelled")) {
+      errorMessage = "Wallet connection was cancelled. Please connect your Phantom wallet and try again.";
+    } else if (error.message.includes("signTransaction")) {
+      errorMessage = "Transaction signing failed. Please approve the transaction in your wallet and try again.";
+    } else if (error.message.includes("No transaction returned")) {
+      errorMessage = "No transaction was returned from the build step. Please try again.";
+    }
+    
+    showErrorBanner(`Error: ${errorMessage}`);
+    connectBtn.disabled = false;
+    connectBtn.textContent = "Connect wallet & create";
+  }
+});
+
+// Handle image selection dropdown
+imageSelect.addEventListener("change", () => {
+  if (imageSelect.value) {
+    imageUrlInput.value = imageSelect.value;
+  }
+});
+
+// Handle back button
+backBtn.addEventListener("click", () => {
+  marketView.hidden = true;
+  form.hidden = false;
+});
+
+// Helper functions
 function renderChecks(checks) {
   checksEl.innerHTML = "";
   for (const [name, result] of Object.entries(checks)) {
@@ -126,140 +263,123 @@ function renderChecks(checks) {
   }
 }
 
-form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!lastGatePassed) {
-    showError("Please fix quality issues before creating market");
-    return;
-  }
-
-  connectBtn.disabled = true;
-  connectBtn.textContent = "Creating market...";
-
+// Load categories from API
+async function loadCategories() {
   try {
-    // Step 1: Get a quote
-    const question = questionInput.value;
-    const deadline = deadlineInput.value;
-    const source = sourceInput.value;
-
-    const quoteRes = await fetch(`${API_BASE}/api/quote`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        question,
-        deadline: deadline ? `${deadline}T23:59:59Z` : "",
-        source,
-      }),
-    });
-
-    if (!quoteRes.ok) {
-      const error = await quoteRes.json();
-      throw new Error(error.detail || "Failed to get quote");
+    const res = await fetch(`${API_BASE}/api/categories`);
+    if (res.ok) {
+      categories = await res.json();
+      // Clear existing options except the default
+      categorySelect.innerHTML = '<option value="">Select a category</option>';
+      // Add categories from API
+      categories.forEach(cat => {
+        const option = document.createElement("option");
+        option.value = cat;
+        option.textContent = cat.charAt(0).toUpperCase() + cat.slice(1); // Capitalize
+        categorySelect.appendChild(option);
+      });
     }
-
-    currentQuote = await quoteRes.json();
-    console.log("Quote received:", currentQuote);
-
-    // Step 2: Connect wallet using Phantom deep link
-    const walletAddress = await connectPhantomWallet();
-    if (!walletAddress) {
-      throw new Error("Wallet connection failed or cancelled");
-    }
-
-    // Step 3: Build the transaction
-    const buildRes = await fetch(`${API_BASE}/api/build`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        quote_id: currentQuote.quoteId,
-        creator_wallet: walletAddress,
-      }),
-    });
-
-    if (!buildRes.ok) {
-      const error = await buildRes.json();
-      throw new Error(error.detail || "Failed to build transaction");
-    }
-
-    currentBuild = await buildRes.json();
-    console.log("Build received:", currentBuild);
-
-    // Step 4: Sign the transaction (simulated for demo - in production use actual wallet signing)
-    // For this demo, we'll simulate signing since we don't have a real Solana transaction
-    // In production, you would use:
-    // const signedTx = await window.solana.signTransaction(transaction);
-    const signedTx = simulateSigning(currentBuild.transaction);
-
-    // Step 5: Register the market
-    const registerRes = await fetch(`${API_BASE}/api/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        build_id: currentBuild.buildId,
-        signed_transaction: signedTx,
-      }),
-    });
-
-    if (!registerRes.ok) {
-      const error = await registerRes.json();
-      throw new Error(error.detail || "Failed to register market");
-    }
-
-    const registerResult = await registerRes.json();
-    console.log("Market registered:", registerResult);
-
-    // Step 6: Show success and close
-    showSuccess(registerResult);
-    tg?.close();
-
   } catch (error) {
-    console.error("Market creation failed:", error);
-    showError(error.message || "Failed to create market");
-    connectBtn.disabled = false;
-    connectBtn.textContent = "Connect wallet & create";
+    console.error("Failed to load categories:", error);
+    // Fallback to hardcoded categories if API fails
+    categorySelect.innerHTML = `
+      <option value="">Select a category</option>
+      <option value="crypto">Crypto</option>
+    `;
+    categories = ["crypto"];
   }
-});
+}
 
-// Connect to Phantom wallet using deep link
-async function connectPhantomWallet() {
-  // Check if Phantom is already connected
-  if (window.solana && window.solana.isPhantom) {
-    try {
-      const response = await window.solana.connect();
-      return response.publicKey.toString();
-    } catch (err) {
-      console.error("Phantom connection error:", err);
+// Load market details for trading view
+async function loadMarketDetails(marketId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/markets/${marketId}`);
+    if (res.ok) {
+      const market = await res.json();
+      // Handle null price fields
+      const yesPrice = market.yesPrice || market.primaryYesPrice;
+      const noPrice = market.noPrice || market.primaryNoPrice;
+      const priceText = yesPrice ? `Yes: ${yesPrice} | No: ${noPrice}` : "No live price yet";
+
+      marketDetails.innerHTML = `
+        <p><strong>Question:</strong> <span id="market-question"></span></p>
+        <p><strong>Price:</strong> ${priceText}</p>
+        <p><strong>Category:</strong> ${market.category || "N/A"}</p>
+        <p><strong>End Time:</strong> ${market.endTime || "N/A"}</p>
+        <p><strong>Status:</strong> ${market.status || "Unknown"}</p>
+      `;
+      // Use textContent for user-provided question to prevent XSS
+      const questionSpan = document.getElementById("market-question");
+      if (questionSpan) {
+        questionSpan.textContent = market.question || "Unknown";
+      }
+    } else {
+      marketDetails.innerHTML = "<p>Error loading market details</p>";
     }
+  } catch (error) {
+    console.error("Failed to load market details:", error);
+    marketDetails.innerHTML = "<p>Error loading market details</p>";
+  }
+}
+
+// Optional Telegram WebApp initialization (safe)
+function initTelegram() {
+  try {
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+  } catch (error) {
+    console.warn("Telegram WebApp initialization failed:", error);
+  }
+}
+
+// Initialize app
+function initApp() {
+  // Attach DOM listeners first (already done above)
+
+  // Load categories
+  loadCategories();
+
+  // Pre-fill question from Telegram start_param or URL parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const questionParam = urlParams.get('q');
+
+  if (questionParam) {
+    // URLSearchParams automatically decodes, use .value to prevent XSS
+    document.getElementById("question").value = questionParam;
+  } else if (tg?.initDataUnsafe?.start_param) {
+    // Fallback to Telegram's start_param (not URL-encoded)
+    document.getElementById("question").value = tg.initDataUnsafe.start_param;
   }
 
-  // If not connected or not available, open Phantom deep link
-  const phantomUrl = "https://phantom.app/ul/browse/https://panta.market";
-  tg?.openLink(phantomUrl);
+  // Check if opened via trade button (market parameter)
+  const marketId = urlParams.get('market');
 
-  // For demo purposes, return a mock wallet address
-  // In production, you would wait for the actual connection callback
-  return "demo_wallet_address_for_testing";
+  if (marketId) {
+    // URLSearchParams automatically decodes
+    // Show market view instead of create form
+    form.hidden = true;
+    marketView.hidden = false;
+    loadMarketDetails(marketId);
+  }
+
+  // Initialize Telegram WebApp (optional)
+  initTelegram();
+
+  // Show debug panel if in debug mode
+  if (debugMode) {
+    updateDebugPanel();
+  }
 }
 
-// Simulate transaction signing (for demo purposes)
-function simulateSigning(unsignedTx) {
-  // In production, this would be:
-  // const { signature } = await window.solana.signTransaction(transaction);
-  // return signature;
-  
-  console.log("Simulating signing of transaction:", unsignedTx);
-  return "simulated_signed_transaction_for_demo";
-}
+// Check for debug mode
+const urlParams = new URLSearchParams(window.location.search);
+debugMode = urlParams.has('debug');
 
-function showError(message) {
-  checksEl.innerHTML = `<div class="check-fail">❌ Error: ${message}</div>`;
-}
-
-function showSuccess(result) {
-  checksEl.innerHTML = `
-    <div class="check-pass">✅ Market created successfully!</div>
-    <div class="check-pass">Market ID: ${result.marketId}</div>
-    <div class="check-pass">Status: ${result.status}</div>
-  `;
-  form.style.display = "none";
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
 }

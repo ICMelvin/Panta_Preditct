@@ -7,9 +7,57 @@ Known quirks to handle (confirm/adjust against the live API as you test):
 - GET /markets/ requires the trailing slash.
 - Price fields (yesPrice / primaryYesPrice / secondaryYesPrice) can come
   back as null — that means "no live price yet", NOT 0%.
-- Timestamps may be unix seconds (live) vs ISO strings (sandbox).
+- Timestamps are unix seconds (not ISO strings).
 - Image URLs are validated at both the quote and build steps; not every
   public image host is accepted.
+- API key creation requires an "env" field in the JSON body ("test" or "live").
+- Register endpoint is /markets/register/ (not /markets/create/register/).
+
+CONFIRMED ENDPOINT PATHS (verified against live API):
+- POST /markets/create/quote/ — returns {"createId": "...", "paymentUsdc": "...", ...}
+- POST /markets/create/build/ — returns {"transaction": "...", "buildFingerprint": "...", ...}
+- POST /markets/register/ — returns {"status": "registered", "marketId": "...", ...}
+
+REAL RESPONSE SHAPES (from live API calls):
+Quote response:
+{
+  "createId": "cr_sandbox_test",
+  "userId": "usr_...",
+  "apiKeyId": "key_...",
+  "expectedEventPda": "TestMarket...",
+  "paymentUsdc": "50000000",
+  "liquidityInjectionUsdc": "10000000",
+  "platformRevenueUsdc": "40000000",
+  "marketType": "standard",
+  "expiresAt": "2099-01-01T00:00:00Z",
+  "blockhashExpiryHintSec": 60,
+  "disclaimer": "Test mode: this response uses sandbox fixtures..."
+}
+
+Build response:
+{
+  "transaction": "",
+  "buildFingerprint": "sandbox",
+  "expectedEventPda": "TestMarket...",
+  "recentBlockhash": "SandboxBlockhash...",
+  "lastValidBlockHeight": 0,
+  "expiresAt": "2099-01-01T00:00:00Z",
+  "disclaimer": "Test mode: this response uses sandbox fixtures..."
+}
+
+Register response:
+{
+  "status": "registered",
+  "marketId": "TestMarket...",
+  "createId": "cr_sandbox_test",
+  "signature": "sandboxSignature...",
+  "paymentUsdc": "50.00",
+  "paymentUsdcBase": "50000000",
+  "category": "crypto",
+  "title": "Sandbox test market",
+  "images": [],
+  "disclaimer": "Test mode: this response uses sandbox fixtures..."
+}
 """
 
 from __future__ import annotations
@@ -69,9 +117,9 @@ class PantaClient:
         _raise_for_status(resp)
         return resp.json()
 
-    def create_api_key(self, label: str = "pantapredict") -> dict:
+    def create_api_key(self, label: str = "pantapredict", env: str = "test") -> dict:
         """POST /account/keys/ — issue a pk_test_/pk_live_ key for this account."""
-        resp = self._client.post("/account/keys/", json={"label": label})
+        resp = self._client.post("/account/keys/", json={"label": label, "env": env})
         _raise_for_status(resp)
         return resp.json()
 
@@ -88,50 +136,83 @@ class PantaClient:
         _raise_for_status(resp)
         return resp.json()
 
+    def get_categories(self) -> list[str]:
+        """GET /markets/categories/ — get the allowlist of valid category values."""
+        try:
+            resp = self._client.get("/markets/categories/")
+            _raise_for_status(resp)
+            data = resp.json()
+            # Handle different response formats
+            if isinstance(data, list):
+                return data
+            elif isinstance(data, dict) and "category" in data:
+                return [data["category"]]
+            else:
+                # Fallback to extracting from markets
+                markets = self.list_markets()
+                categories = set()
+                if "items" in markets:
+                    for market in markets["items"]:
+                        if "category" in market:
+                            categories.add(market["category"])
+                return list(categories)
+        except Exception as e:
+            # Fallback to hardcoded categories if API fails
+            return ["crypto"]
+
     # ---- market creation flow: quote -> build -> register ----
 
     def quote_market(
         self,
         question: str,
-        deadline: str,
-        source: str,
+        resolution_rule: str,
+        sources_of_truth: list[str],
         description: str = "",
         image_url: Optional[str] = None,
         category: Optional[str] = None,
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
+        resolution_time: Optional[int] = None,
     ) -> MarketQuote:
         """POST /markets/create/quote/ — get pricing/fee quote for a new market."""
         payload = {
             "question": question,
-            "deadline": deadline,
-            "source": source,
+            "resolutionRule": resolution_rule,
+            "sourcesOfTruth": sources_of_truth,
             "description": description,
         }
         if image_url:
             payload["imageUrl"] = image_url
         if category:
             payload["category"] = category
+        if start_time is not None:
+            payload["startTime"] = start_time
+        if end_time is not None:
+            payload["endTime"] = end_time
+        if resolution_time is not None:
+            payload["resolutionTime"] = resolution_time
 
         resp = self._client.post("/markets/create/quote/", json=payload)
         _raise_for_status(resp)
         return MarketQuote(raw=resp.json())
 
-    def build_market(self, quote: MarketQuote, creator_wallet: str) -> dict:
+    def build_market(self, create_id: str, wallet: str) -> dict:
         """
         POST /markets/create/build/ — returns an unsigned transaction for the
         creator's wallet to sign. Backend must never sign this itself.
         """
-        payload = {"quoteId": quote.raw.get("quoteId"), "creatorWallet": creator_wallet}
+        payload = {"createId": create_id, "wallet": wallet}
         resp = self._client.post("/markets/create/build/", json=payload)
         _raise_for_status(resp)
         return resp.json()
 
-    def register_market(self, build_id: str, signed_tx: str) -> dict:
+    def register_market(self, create_id: str, signature: str) -> dict:
         """
-        POST /markets/create/register/ — submit the signed transaction to
-        finalize market creation.
+        POST /markets/register/ — submit the broadcast transaction signature
+        to finalize market creation.
         """
-        payload = {"buildId": build_id, "signedTransaction": signed_tx}
-        resp = self._client.post("/markets/create/register/", json=payload)
+        payload = {"createId": create_id, "signature": signature}
+        resp = self._client.post("/markets/register/", json=payload)
         _raise_for_status(resp)
         return resp.json()
 
