@@ -8,7 +8,7 @@
 }
 
 :root {
-  /* Panta-inspired color palette */
+  /* Color palette matching logo */
   --bg-primary: #0a0a0f;
   --bg-secondary: #12121a;
   --bg-card: #1a1a24;
@@ -16,9 +16,9 @@
   --border-subtle: #2a2a3a;
   --border-accent: #3a3a4a;
   
-  /* Accent colors */
-  --accent-purple: #8b5cf6;
-  --accent-cyan: #06b6d4;
+  /* Accent colors matching logo */
+  --accent-blue-grey: #7A8BA0; /* Desaturated blue-grey from chat bubble */
+  --accent-orange-brown: #A0785C; /* Desaturated orange-brown from arrow */
   --accent-green: #10b981;
   --accent-red: #f43f5e;
   --accent-pink: #ec4899;
@@ -32,8 +32,8 @@
   --tg-theme-bg-color: var(--bg-primary) !important;
   --tg-theme-text-color: var(--text-primary) !important;
   --tg-theme-hint-color: var(--text-secondary) !important;
-  --tg-theme-link-color: var(--accent-cyan) !important;
-  --tg-theme-button-color: var(--accent-purple) !important;
+  --tg-theme-link-color: var(--accent-orange-brown) !important;
+  --tg-theme-button-color: var(--accent-blue-grey) !important;
   --tg-theme-button-text-color: var(--text-primary) !important;
   --tg-theme-secondary-bg-color: var(--bg-secondary) !important;
   --tg-theme-header-bg-color: var(--text-primary) !important;
@@ -76,20 +76,8 @@ body {
 .logo-icon {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+  object-fit: contain;
   border-radius: 8px;
-  position: relative;
-}
-
-.logo-icon::before {
-  content: "P";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
 }
 
 .brand-name {
@@ -105,8 +93,8 @@ body {
 
 .wallet-btn {
   background: transparent;
-  border: 1px solid var(--accent-purple);
-  color: var(--accent-purple);
+  border: 1px solid var(--accent-blue-grey);
+  color: var(--accent-blue-grey);
   padding: 8px 16px;
   border-radius: 20px;
   font-size: 14px;
@@ -119,7 +107,7 @@ body {
 }
 
 .wallet-btn:hover {
-  background: rgba(139, 92, 246, 0.1);
+  background: rgba(122, 139, 160, 0.1);
 }
 
 .wallet-btn.connected {
@@ -222,14 +210,8 @@ body {
 .landing-icon {
   width: 64px;
   height: 64px;
-  background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+  object-fit: contain;
   border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
@@ -237,7 +219,7 @@ body {
   font-size: 28px;
   font-weight: 700;
   line-height: 1.2;
-  background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+  background: linear-gradient(135deg, var(--accent-blue-grey), var(--accent-orange-brown));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -324,8 +306,8 @@ input[type="date"]:focus,
 textarea:focus,
 select:focus {
   outline: none;
-  border-color: var(--accent-purple);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+  border-color: var(--accent-blue-grey);
+  box-shadow: 0 0 0 3px rgba(122, 139, 160, 0.2);
 }
 
 textarea {
@@ -411,19 +393,19 @@ button {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+  background: linear-gradient(135deg, var(--accent-blue-grey), var(--accent-orange-brown));
   color: var(--text-primary);
   border: none;
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(122, 139, 160, 0.3);
 }
 
 .btn-primary:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.2);
+  box-shadow: 0 2px 6px rgba(122, 139, 160, 0.2);
 }
 
 .btn-primary:disabled {
@@ -435,12 +417,12 @@ button {
 
 .btn-secondary {
   background: transparent;
-  color: var(--accent-cyan);
-  border: 1px solid var(--accent-cyan);
+  color: var(--accent-orange-brown);
+  border: 1px solid var(--accent-orange-brown);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(6, 182, 212, 0.1);
+  background: rgba(160, 120, 92, 0.1);
 }
 
 /* Market View */
@@ -487,7 +469,7 @@ button {
   width: 40px;
   height: 40px;
   border: 3px solid var(--border-subtle);
-  border-top-color: var(--accent-purple);
+  border-top-color: var(--accent-blue-grey);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 16px;
@@ -591,7 +573,6 @@ footer {
   .landing-icon {
     width: 72px;
     height: 72px;
-    font-size: 36px;
   }
   
   .landing-title {
@@ -612,7 +593,6 @@ footer {
   .landing-icon {
     width: 80px;
     height: 80px;
-    font-size: 40px;
   }
   
   .landing-title {
@@ -645,7 +625,6 @@ footer {
   .landing-icon {
     width: 48px;
     height: 48px;
-    font-size: 24px;
   }
   
   .form-container {
