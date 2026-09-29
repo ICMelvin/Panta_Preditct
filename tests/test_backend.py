@@ -1,7 +1,26 @@
 from fastapi.testclient import TestClient
 from backend.main import app
+import logging
 
 client = TestClient(app)
+
+
+def test_logging_config_redacts_token():
+    """Test that httpx logging is set to WARNING to prevent token leaks."""
+    # Import bot to trigger its logging configuration
+    import bot.bot
+    
+    # httpx should be set to WARNING level, not INFO
+    httpx_logger = logging.getLogger("httpx")
+    assert httpx_logger.getEffectiveLevel() >= logging.WARNING, "httpx logger should be WARNING or higher to prevent token leaks"
+    
+    # httpcore should also be suppressed
+    httpcore_logger = logging.getLogger("httpcore")
+    assert httpcore_logger.getEffectiveLevel() >= logging.WARNING, "httpcore logger should be WARNING or higher to prevent token leaks"
+    
+    # telegram.request should be suppressed
+    telegram_request_logger = logging.getLogger("telegram.request")
+    assert telegram_request_logger.getEffectiveLevel() >= logging.WARNING, "telegram.request logger should be WARNING or higher to prevent token leaks"
 
 
 def test_get_root():

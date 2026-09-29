@@ -10,9 +10,20 @@ from pathlib import Path
 # Add parent directory to path to load backend modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging BEFORE importing other modules to suppress httpx token leaks
+# Set httpx to WARNING level to prevent token from appearing in logs
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+
+# Suppress httpx INFO logs which contain the bot token in URLs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+# Also suppress verbose logging from telegram.request
+logging.getLogger("telegram.request").setLevel(logging.WARNING)
 
 # Load environment variables from .env file with override=True to win over stale shell variables
 # In production (Render), environment variables come from the platform, not from .env
@@ -30,10 +41,6 @@ from telegram.error import NetworkError, TimedOut
 import httpx
 
 from bot.handlers import predict, start, trade, handle_webapp_data
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 async def error_handler(update, context):
