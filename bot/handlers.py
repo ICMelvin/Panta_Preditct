@@ -10,10 +10,15 @@ so the bot works even before the Mini App exists.
 from __future__ import annotations
 
 import os
+import sys
 import asyncio
 import logging
+from pathlib import Path
 from functools import wraps
 from urllib.parse import quote
+
+# Add parent directory to path to load backend modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import ContextTypes, CallbackQueryHandler
@@ -22,10 +27,23 @@ from telegram.error import NetworkError, TimedOut
 from backend.panta_client import PantaClient
 from backend.quality_gate import run_quality_gate
 
+# Load environment variables before evaluating MINIAPP_URL
+# This is needed because handlers.py is imported before bot.py loads the environment
+from dotenv import load_dotenv
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path, override=True)
+
 MINIAPP_URL = os.getenv("TELEGRAM_MINIAPP_URL", "")
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Log which path will be used
+if MINIAPP_URL:
+    logger.info(f"MINIAPP_URL is set: {MINIAPP_URL} -> Using Mini App button path")
+else:
+    logger.info("MINIAPP_URL is not set -> Using fallback quote_market path")
 
 # Initialize Panta client lazily to ensure env vars are loaded
 _panta = None
@@ -113,12 +131,12 @@ async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Fallback path for before the Mini App / wallet signing exists —
         # gets you a real end-to-end test using quote() alone.
         panta = get_panta_client()
-        quote = panta.quote_market(
+        market_quote = panta.quote_market(
             question=question,
             resolution_rule="To be determined",
             sources_of_truth=["https://example.com"],
         )
-        await safe_reply_text(update.message, f"Quote received: {quote.raw}")
+        await safe_reply_text(update.message, f"Quote received: {market_quote.raw}")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
