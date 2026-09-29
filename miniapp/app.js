@@ -1,10 +1,30 @@
-// Layer 5 — Mini App logic.
-// Robust error handling and optional dependencies
+// Layer 5 — Mini App logic
+// Complete rebuild with landing page, persistent nav, and wallet-gated flow
 
 const tg = window.Telegram?.WebApp;
 const API_BASE = ""; // same-origin, backend serves this file too
 
-// DOM elements - get them first
+// State
+let connectedWallet = null;
+let categories = [];
+let lastGatePassed = false;
+let currentCreateId = null;
+
+// Error tracking
+const errors = [];
+let debugMode = false;
+
+// DOM elements
+const navBar = document.getElementById("nav-bar");
+const walletBtn = document.getElementById("wallet-btn");
+const walletText = document.getElementById("wallet-text");
+const walletIndicator = document.getElementById("wallet-indicator");
+const walletDropdown = document.getElementById("wallet-dropdown");
+const disconnectBtn = document.getElementById("disconnect-btn");
+const landingPage = document.getElementById("landing-page");
+const formPage = document.getElementById("form-page");
+const marketView = document.getElementById("market-view");
+const landingConnectBtn = document.getElementById("landing-connect-btn");
 const form = document.getElementById("create-form");
 const checkBtn = document.getElementById("check-btn");
 const connectBtn = document.getElementById("connect-btn");
@@ -12,25 +32,17 @@ const checksEl = document.getElementById("quality-checks");
 const categorySelect = document.getElementById("category");
 const imageSelect = document.getElementById("image_select");
 const imageUrlInput = document.getElementById("image_url");
-const marketView = document.getElementById("market-view");
 const marketDetails = document.getElementById("market-details");
 const backBtn = document.getElementById("back-btn");
-
-// State
-let lastGatePassed = false;
-let currentCreateId = null;
-let connectedWallet = null;
-let categories = [];
-
-// Error tracking
-const errors = [];
-let debugMode = false;
+const loadingOverlay = document.getElementById("loading-overlay");
+const loadingText = document.getElementById("loading-text");
+const toastContainer = document.getElementById("toast-container");
 
 // Global error handlers
 window.onerror = function(message, source, lineno, colno, error) {
   const errorInfo = `${message} (${source}:${lineno})`;
   errors.push(errorInfo);
-  showErrorBanner(errorInfo);
+  showToast(errorInfo, "error");
   if (debugMode) updateDebugPanel();
   console.error(error);
 };
@@ -38,36 +50,45 @@ window.onerror = function(message, source, lineno, colno, error) {
 window.addEventListener('unhandledrejection', function(event) {
   const errorInfo = `Promise rejected: ${event.reason}`;
   errors.push(errorInfo);
-  showErrorBanner(errorInfo);
+  showToast(errorInfo, "error");
   if (debugMode) updateDebugPanel();
   console.error(event.reason);
 });
 
-// Show error banner
-function showErrorBanner(message) {
-  let banner = document.getElementById('error-banner');
-  if (!banner) {
-    banner = document.createElement('div');
-    banner.id = 'error-banner';
-    banner.style.cssText = 'background: #fee; color: #c33; padding: 10px; margin: 10px 0; border: 1px solid #c33; display: none;';
-    document.body.insertBefore(banner, document.body.firstChild);
-  }
-  banner.textContent = `Error: ${message}`;
-  banner.style.display = 'block';
+// Toast notifications
+function showToast(message, type = "info") {
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.opacity = "0";
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
 }
 
-// Update debug panel
+// Loading overlay
+function showLoading(text = "Loading...") {
+  loadingText.textContent = text;
+  loadingOverlay.classList.remove("hidden");
+}
+
+function hideLoading() {
+  loadingOverlay.classList.add("hidden");
+}
+
+// Debug panel
 function updateDebugPanel() {
   let panel = document.getElementById('debug-panel');
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'debug-panel';
-    panel.style.cssText = 'position: fixed; bottom: 0; right: 0; background: #333; color: #fff; padding: 10px; max-width: 300px; max-height: 200px; overflow-y: auto; font-size: 12px; z-index: 9999;';
     document.body.appendChild(panel);
   }
 
   let html = '<strong>Debug Panel</strong><br>';
-  html += `API Base: ${API_BASE}<br>`;
+  html += `Wallet: ${connectedWallet || 'Not connected'}<br>`;
   html += `Errors (${errors.length}):<br>`;
   errors.slice(-5).forEach(err => {
     html += `- ${err}<br>`;
@@ -76,7 +97,87 @@ function updateDebugPanel() {
   panel.innerHTML = html;
 }
 
-// Attach DOM event listeners FIRST (before any optional work)
+// Wallet connection
+async function connectWallet() {
+  if (!window.solana || !window.solana.isPhantom) {
+    showToast("Phantom wallet not detected. Please install Phantom wallet and try again.", "error");
+    return;
+  }
+
+  try {
+    showLoading("Connecting wallet...");
+    const resp = await window.solana.connect();
+    connectedWallet = resp.publicKey.toString();
+    updateWalletUI();
+    showLanding(false);
+    showToast("Wallet connected successfully!", "success");
+  } catch (error) {
+    console.error("Wallet connection failed:", error);
+    showToast("Wallet connection cancelled or failed. Please try again.", "error");
+  } finally {
+    hideLoading();
+  }
+}
+
+function disconnectWallet() {
+  connectedWallet = null;
+  updateWalletUI();
+  walletDropdown.classList.add("hidden");
+  showLanding(true);
+  showToast("Wallet disconnected", "info");
+}
+
+function updateWalletUI() {
+  if (connectedWallet) {
+    // Truncate address
+    const truncated = `${connectedWallet.slice(0, 4)}...${connectedWallet.slice(-4)}`;
+    walletText.textContent = truncated;
+    walletBtn.classList.add("connected");
+    walletIndicator.style.opacity = "1";
+  } else {
+    walletText.textContent = "Connect Wallet";
+    walletBtn.classList.remove("connected");
+    walletIndicator.style.opacity = "0";
+  }
+}
+
+// Navigation
+function showLanding(show) {
+  if (show) {
+    landingPage.classList.remove("hidden");
+    formPage.classList.add("hidden");
+    marketView.classList.add("hidden");
+  } else {
+    landingPage.classList.add("hidden");
+    formPage.classList.remove("hidden");
+    marketView.classList.add("hidden");
+  }
+}
+
+function showMarketView() {
+  landingPage.classList.add("hidden");
+  formPage.classList.add("hidden");
+  marketView.classList.remove("hidden");
+}
+
+// Attach DOM event listeners
+landingConnectBtn.addEventListener("click", connectWallet);
+walletBtn.addEventListener("click", () => {
+  if (connectedWallet) {
+    walletDropdown.classList.toggle("hidden");
+  } else {
+    connectWallet();
+  }
+});
+disconnectBtn.addEventListener("click", disconnectWallet);
+
+// Close dropdown when clicking outside
+document.addEventListener("click", (e) => {
+  if (!walletBtn.contains(e.target) && !walletDropdown.contains(e.target)) {
+    walletDropdown.classList.add("hidden");
+  }
+});
+
 checkBtn.addEventListener("click", async () => {
   const question = document.getElementById("question").value;
   const sourcesText = document.getElementById("sources_of_truth").value;
@@ -97,19 +198,34 @@ checkBtn.addEventListener("click", async () => {
     renderChecks(data.checks);
     lastGatePassed = data.passed;
     connectBtn.disabled = !data.passed;
+    
+    if (data.passed) {
+      showToast("Quality checks passed! You can now create the market.", "success");
+    } else {
+      showToast("Quality checks failed. Please fix the issues above.", "error");
+    }
   } catch (error) {
-    showErrorBanner(`Quality check failed: ${error.message}`);
+    showToast(`Quality check failed: ${error.message}`, "error");
     console.error("Quality check error:", error);
   }
 });
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  if (!lastGatePassed) return;
+  if (!lastGatePassed) {
+    showToast("Please pass quality checks first", "error");
+    return;
+  }
+
+  if (!connectedWallet) {
+    showToast("Please connect your wallet first", "error");
+    return;
+  }
 
   try {
     connectBtn.disabled = true;
     connectBtn.textContent = "Creating market...";
+    showLoading("Creating market...");
 
     // 1. Get a quote from POST /api/quote
     const question = document.getElementById("question").value;
@@ -149,24 +265,7 @@ form.addEventListener("submit", async (e) => {
     const quoteData = await quoteRes.json();
     currentCreateId = quoteData.createId;
 
-    // 2. Connect wallet using Phantom deep link
-    if (!window.solana || !window.solana.isPhantom) {
-      // Open Phantom deep link if wallet not connected
-      const dappUrl = window.location.href;
-      const phantomLink = `https://phantom.app/ul/browse/${encodeURIComponent(dappUrl)}?ref=${encodeURIComponent(dappUrl)}`;
-      window.open(phantomLink, "_blank");
-      throw new Error("Phantom wallet not connected. Please install Phantom, connect it, and try again.");
-    }
-
-    let resp;
-    try {
-      resp = await window.solana.connect();
-    } catch (connectError) {
-      throw new Error("Wallet connection cancelled or failed. Please connect your Phantom wallet and try again.");
-    }
-    connectedWallet = resp.publicKey.toString();
-
-    // 3. Call POST /api/build with the connected wallet address
+    // 2. Call POST /api/build with the already-connected wallet
     const buildRes = await fetch(`${API_BASE}/api/build`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -183,8 +282,7 @@ form.addEventListener("submit", async (e) => {
 
     const buildData = await buildRes.json();
 
-    // 4. Have the wallet sign the returned unsigned transaction
-    // Note: The transaction is base64 encoded from Panta
+    // 3. Have the wallet sign the returned unsigned transaction
     if (!buildData.transaction) {
       throw new Error("No transaction returned from build step");
     }
@@ -196,7 +294,7 @@ form.addEventListener("submit", async (e) => {
     const signedTransaction = await window.solana.signTransaction(transactionBytes);
     const signature = bs58.encode(signedTransaction.signature);
 
-    // 5. Call POST /api/register with the signature
+    // 4. Call POST /api/register with the signature
     const registerRes = await fetch(`${API_BASE}/api/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -213,29 +311,26 @@ form.addEventListener("submit", async (e) => {
 
     const registerData = await registerRes.json();
 
-    // 6. Show confirmation
-    alert(`Market created successfully!\n\nCreate ID: ${currentCreateId}\nWallet: ${connectedWallet}\n\nUse /trade ${currentCreateId} in Telegram to view market details.`);
-
+    // 5. Show success
+    showToast(`Market created successfully! Create ID: ${currentCreateId}`, "success");
     tg?.close();
 
   } catch (error) {
     console.error("Market creation failed:", error);
     let errorMessage = error.message;
     
-    // Provide more specific error messages for common failures
-    if (error.message.includes("Phantom wallet not connected")) {
-      errorMessage = "Phantom wallet not connected. Please install Phantom wallet, connect it, and try again.";
-    } else if (error.message.includes("Wallet connection cancelled")) {
-      errorMessage = "Wallet connection was cancelled. Please connect your Phantom wallet and try again.";
-    } else if (error.message.includes("signTransaction")) {
-      errorMessage = "Transaction signing failed. Please approve the transaction in your wallet and try again.";
-    } else if (error.message.includes("No transaction returned")) {
+    // Provide specific error messages
+    if (error.message.includes("signTransaction")) {
+      errorMessage = "Transaction signing failed. Please approve the transaction in your wallet.";
+    } else if (error.message.includes("No transaction")) {
       errorMessage = "No transaction was returned from the build step. Please try again.";
     }
     
-    showErrorBanner(`Error: ${errorMessage}`);
+    showToast(`Error: ${errorMessage}`, "error");
     connectBtn.disabled = false;
-    connectBtn.textContent = "Connect wallet & create";
+    connectBtn.textContent = "Create Market";
+  } finally {
+    hideLoading();
   }
 });
 
@@ -248,8 +343,7 @@ imageSelect.addEventListener("change", () => {
 
 // Handle back button
 backBtn.addEventListener("click", () => {
-  marketView.hidden = true;
-  form.hidden = false;
+  showLanding(false);
 });
 
 // Helper functions
@@ -269,19 +363,16 @@ async function loadCategories() {
     const res = await fetch(`${API_BASE}/api/categories`);
     if (res.ok) {
       categories = await res.json();
-      // Clear existing options except the default
       categorySelect.innerHTML = '<option value="">Select a category</option>';
-      // Add categories from API
       categories.forEach(cat => {
         const option = document.createElement("option");
         option.value = cat;
-        option.textContent = cat.charAt(0).toUpperCase() + cat.slice(1); // Capitalize
+        option.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
         categorySelect.appendChild(option);
       });
     }
   } catch (error) {
     console.error("Failed to load categories:", error);
-    // Fallback to hardcoded categories if API fails
     categorySelect.innerHTML = `
       <option value="">Select a category</option>
       <option value="crypto">Crypto</option>
@@ -296,7 +387,6 @@ async function loadMarketDetails(marketId) {
     const res = await fetch(`${API_BASE}/api/markets/${marketId}`);
     if (res.ok) {
       const market = await res.json();
-      // Handle null price fields
       const yesPrice = market.yesPrice || market.primaryYesPrice;
       const noPrice = market.noPrice || market.primaryNoPrice;
       const priceText = yesPrice ? `Yes: ${yesPrice} | No: ${noPrice}` : "No live price yet";
@@ -308,7 +398,6 @@ async function loadMarketDetails(marketId) {
         <p><strong>End Time:</strong> ${market.endTime || "N/A"}</p>
         <p><strong>Status:</strong> ${market.status || "Unknown"}</p>
       `;
-      // Use textContent for user-provided question to prevent XSS
       const questionSpan = document.getElementById("market-question");
       if (questionSpan) {
         questionSpan.textContent = market.question || "Unknown";
@@ -322,8 +411,47 @@ async function loadMarketDetails(marketId) {
   }
 }
 
-// Optional Telegram WebApp initialization (safe)
-function initTelegram() {
+// Initialize app
+function initApp() {
+  // Check for debug mode
+  const urlParams = new URLSearchParams(window.location.search);
+  debugMode = urlParams.has('debug');
+
+  // Load categories
+  loadCategories();
+
+  // Check if wallet is already connected ( Phantom persists session)
+  if (window.solana && window.solana.isPhantom) {
+    window.solana.connect({ onlyIfTrusted: false }).then(resp => {
+      if (resp) {
+        connectedWallet = resp.publicKey.toString();
+        updateWalletUI();
+        showLanding(false);
+      }
+    }).catch(() => {
+      // Not connected, show landing
+      showLanding(true);
+    });
+  } else {
+    showLanding(true);
+  }
+
+  // Pre-fill question from Telegram start_param or URL parameter
+  const questionParam = urlParams.get('q');
+  if (questionParam) {
+    document.getElementById("question").value = questionParam;
+  } else if (tg?.initDataUnsafe?.start_param) {
+    document.getElementById("question").value = tg.initDataUnsafe.start_param;
+  }
+
+  // Check if opened via trade button (market parameter)
+  const marketId = urlParams.get('market');
+  if (marketId) {
+    showMarketView();
+    loadMarketDetails(marketId);
+  }
+
+  // Initialize Telegram WebApp (optional)
   try {
     if (tg) {
       tg.ready();
@@ -332,50 +460,12 @@ function initTelegram() {
   } catch (error) {
     console.warn("Telegram WebApp initialization failed:", error);
   }
-}
-
-// Initialize app
-function initApp() {
-  // Attach DOM listeners first (already done above)
-
-  // Load categories
-  loadCategories();
-
-  // Pre-fill question from Telegram start_param or URL parameter
-  const urlParams = new URLSearchParams(window.location.search);
-  const questionParam = urlParams.get('q');
-
-  if (questionParam) {
-    // URLSearchParams automatically decodes, use .value to prevent XSS
-    document.getElementById("question").value = questionParam;
-  } else if (tg?.initDataUnsafe?.start_param) {
-    // Fallback to Telegram's start_param (not URL-encoded)
-    document.getElementById("question").value = tg.initDataUnsafe.start_param;
-  }
-
-  // Check if opened via trade button (market parameter)
-  const marketId = urlParams.get('market');
-
-  if (marketId) {
-    // URLSearchParams automatically decodes
-    // Show market view instead of create form
-    form.hidden = true;
-    marketView.hidden = false;
-    loadMarketDetails(marketId);
-  }
-
-  // Initialize Telegram WebApp (optional)
-  initTelegram();
 
   // Show debug panel if in debug mode
   if (debugMode) {
     updateDebugPanel();
   }
 }
-
-// Check for debug mode
-const urlParams = new URLSearchParams(window.location.search);
-debugMode = urlParams.has('debug');
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {

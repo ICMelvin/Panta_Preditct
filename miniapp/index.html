@@ -10,68 +10,120 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- Persistent Top Navigation -->
+  <nav id="nav-bar">
+    <div class="nav-content">
+      <div class="nav-brand">
+        <div class="logo-icon"></div>
+        <span class="brand-name">PantaPredict</span>
+      </div>
+      <div class="nav-wallet">
+        <button id="wallet-btn" class="wallet-btn">
+          <span id="wallet-text">Connect Wallet</span>
+          <span id="wallet-indicator" class="wallet-indicator"></span>
+        </button>
+        <div id="wallet-dropdown" class="wallet-dropdown hidden">
+          <button id="disconnect-btn">Disconnect</button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
   <main id="app">
-    <h1>PantaPredict</h1>
+    <!-- Landing Page -->
+    <section id="landing-page" class="page">
+      <div class="landing-content">
+        <h1 class="landing-title">Turn Chat Predictions into Tradeable Markets</h1>
+        <p class="landing-subtitle">Create real prediction markets from Telegram conversations. Powered by Panta on Solana.</p>
+        <button id="landing-connect-btn" class="btn-primary btn-large">
+          Connect Wallet
+        </button>
+      </div>
+    </section>
 
-    <form id="create-form">
-      <label>
-        Question
-        <input type="text" id="question" required placeholder="Will Bitcoin reach $100k by end of 2026?" />
-      </label>
+    <!-- Prediction Form (gated behind wallet connection) -->
+    <section id="form-page" class="page hidden">
+      <div class="form-container">
+        <h2 class="form-title">Create Market</h2>
+        
+        <form id="create-form">
+          <label>
+            <span class="field-label">QUESTION</span>
+            <input type="text" id="question" required placeholder="Will Bitcoin reach $100k by end of 2026?" />
+          </label>
 
-      <label>
-        Resolution Rule
-        <textarea id="resolution_rule" required placeholder="How will this be resolved? (e.g., Bitcoin reaches $100,000 USD at any point before December 31, 2026, according to CoinMarketCap data)"></textarea>
-      </label>
+          <label>
+            <span class="field-label">RESOLUTION RULE</span>
+            <textarea id="resolution_rule" required placeholder="How will this be resolved? (e.g., Bitcoin reaches $100,000 USD at any point before December 31, 2026, according to CoinMarketCap data)"></textarea>
+          </label>
 
-      <label>
-        Sources of Truth (URLs, one per line)
-        <textarea id="sources_of_truth" required placeholder="https://coinmarketcap.com&#10;https://coingecko.com"></textarea>
-      </label>
+          <label>
+            <span class="field-label">SOURCES OF TRUTH</span>
+            <span class="field-hint">URLs, one per line</span>
+            <textarea id="sources_of_truth" required placeholder="https://coinmarketcap.com&#10;https://coingecko.com"></textarea>
+          </label>
 
-      <label>
-        Category
-        <select id="category" required>
-          <option value="">Loading categories...</option>
-        </select>
-      </label>
+          <label>
+            <span class="field-label">CATEGORY</span>
+            <select id="category" required>
+              <option value="">Loading categories...</option>
+            </select>
+          </label>
 
-      <label>
-        Image
-        <select id="image_select">
-          <option value="">Select an image</option>
-          <option value="https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=400">Bitcoin/Crypto</option>
-          <option value="https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400">Sports</option>
-          <option value="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=400">Politics</option>
-          <option value="https://images.unsplash.com/photo-1611974765270-ca1258634369?w=400">Technology</option>
-        </select>
-        <input type="url" id="image_url" placeholder="Or enter custom image URL" />
-      </label>
+          <label>
+            <span class="field-label">IMAGE</span>
+            <select id="image_select">
+              <option value="">Select an image</option>
+              <option value="https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=400">Bitcoin/Crypto</option>
+              <option value="https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400">Sports</option>
+              <option value="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=400">Politics</option>
+              <option value="https://images.unsplash.com/photo-161197476270-ca1258634369?w=400">Technology</option>
+            </select>
+            <input type="url" id="image_url" placeholder="Or enter custom image URL" />
+          </label>
 
-      <label>
-        End Date
-        <input type="date" id="end_date" required />
-      </label>
+          <label>
+            <span class="field-label">END DATE</span>
+            <input type="date" id="end_date" required />
+          </label>
 
-      <label>
-        Resolution Date
-        <input type="date" id="resolution_date" required />
-      </label>
+          <label>
+            <span class="field-label">RESOLUTION DATE</span>
+            <input type="date" id="resolution_date" required />
+          </label>
 
-      <div id="quality-checks"></div>
+          <div id="quality-checks"></div>
 
-      <button type="button" id="check-btn">Check quality</button>
-      <button type="submit" id="connect-btn" disabled>
-        Connect wallet &amp; create
-      </button>
-    </form>
+          <div class="form-actions">
+            <button type="button" id="check-btn" class="btn-secondary">Check Quality</button>
+            <button type="submit" id="connect-btn" class="btn-primary" disabled>
+              Create Market
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
 
-    <section id="market-view" hidden>
-      <h2>Market Details</h2>
-      <div id="market-details"></div>
-      <button id="back-btn">Back to create</button>
+    <!-- Market View -->
+    <section id="market-view" class="page hidden">
+      <div class="form-container">
+        <h2 class="form-title">Market Details</h2>
+        <div id="market-details"></div>
+        <button id="back-btn" class="btn-secondary">Back to Create</button>
+      </div>
     </section>
   </main>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-content">
+      <div class="spinner"></div>
+      <p id="loading-text">Loading...</p>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div id="toast-container" class="toast-container"></div>
 
   <!-- Mandatory per Panta API Terms of Use §6 — do not remove -->
   <footer>Powered by Panta</footer>
