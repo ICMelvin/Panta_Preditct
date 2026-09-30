@@ -102,26 +102,53 @@ function isMobile() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-// Phantom deep-link connection for mobile
-function connectPhantomDeepLink() {
-  // Generate ephemeral keypair for session encryption
-  const dappKeyPair = solanaWeb3.Keypair.generate();
-  const dappPublicKey = dappKeyPair.publicKey.toBase58();
-  
-  // Get current URL for redirect and app_url
-  const currentUrl = window.location.href.split('?')[0]; // Remove existing params
-  
-  // Build Phantom deep link URL following their spec
-  // app_url is required for session validation
-  const phantomUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(currentUrl)}&dapp_encryption_public_key=${dappPublicKey}&redirect_link=${encodeURIComponent(currentUrl)}&cluster=mainnet-beta`;
-  
-  // Open Phantom deep link using Telegram's openLink method
-  // This opens in the system browser which may handle Android app links better
-  if (tg && tg.openLink) {
-    tg.openLink(phantomUrl);
-  } else {
-    // Fallback to window.location.href if Telegram WebApp not available
-    window.location.href = phantomUrl;
+// Phantom deep-link connection for mobile using backend-mediated flow
+async function connectPhantomDeepLink() {
+  try {
+    showLoading("Initializing wallet connection...");
+    
+    // Generate ephemeral keypair for session encryption
+    const dappKeyPair = solanaWeb3.Keypair.generate();
+    const dappPublicKey = dappKeyPair.publicKey.toBase58();
+    
+    // Initialize wallet session on backend
+    const initRes = await fetch(`${API_BASE}/api/wallet-session-init`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dapp_encryption_public_key: dappPublicKey
+      }),
+    });
+    
+    if (!initRes.ok) {
+      throw new Error("Failed to initialize wallet session");
+    }
+    
+    const { session_id } = await initRes.json();
+    
+    // Store session_id in localStorage for later retrieval
+    localStorage.setItem('phantom_session_id', session_id);
+    
+    // Get current URL for redirect
+    const currentUrl = window.location.href.split('?')[0]; // Remove existing params
+    
+    // Build Phantom deep link URL with session_id in redirect_link
+    // Phantom will redirect to our backend callback page with this session_id
+    const callbackUrl = `${currentUrl}/wallet-callback?session_id=${session_id}`;
+    const phantomUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(currentUrl)}&dapp_encryption_public_key=${dappPublicKey}&redirect_link=${encodeURIComponent(callbackUrl)}&cluster=mainnet-beta`;
+    
+    // Open Phantom deep link using Telegram's openLink method
+    hideLoading();
+    if (tg && tg.openLink) {
+      tg.openLink(phantomUrl);
+    } else {
+      // Fallback to window.location.href if Telegram WebApp not available
+      window.location.href = phantomUrl;
+    }
+  } catch (error) {
+    console.error("Phantom deep-link connection failed:", error);
+    hideLoading();
+    showToast("Failed to initialize wallet connection. Please try again.", "error");
   }
 }
 
@@ -449,18 +476,35 @@ async function loadMarketDetails(marketId) {
 }
 
 // Initialize app
-function initApp() {
+async function initApp() {
   // Check for debug mode
   const urlParams = new URLSearchParams(window.location.search);
   debugMode = urlParams.has('debug');
 
-  // Check for Phantom redirect callback (deep-link return)
-  // Phantom returns session data in query params - would need full encryption handling in production
-  const phantomSession = urlParams.get('phantom_encryption_public_key');
-  if (phantomSession) {
-    // TODO: Handle Phantom session decryption and wallet connection
-    // For now, this is a placeholder for where the callback logic would go
-    console.log("Phantom redirect detected - session handling needed");
+  // Check for wallet session from start_param (returning from Phantom connection)
+  const startParam = tg?.initDataUnsafe?.start_param || urlParams.get('tgWebAppStartParam');
+  if (startParam && startParam.startsWith('session_')) {
+    // Query backend for wallet session
+    try {
+      showLoading("Checking wallet connection...");
+      const sessionRes = await fetch(`${API_BASE}/api/wallet-session/${startParam}`);
+      if (sessionRes.ok) {
+        const sessionData = await sessionRes.json();
+        if (sessionData.wallet_address && !sessionData.expired) {
+          connectedWallet = sessionData.wallet_address;
+          updateWalletUI();
+          showLanding(false);
+          showToast("Wallet connected!", "success");
+        } else {
+          showToast("Wallet session expired or not found. Please connect again.", "error");
+        }
+      }
+      hideLoading();
+    } catch (error) {
+      console.error("Failed to fetch wallet session:", error);
+      hideLoading();
+      showToast("Failed to check wallet connection. Please try again.", "error");
+    }
   }
 
   // Load categories
@@ -486,7 +530,7 @@ function initApp() {
   const questionParam = urlParams.get('q');
   if (questionParam) {
     document.getElementById("question").value = questionParam;
-  } else if (tg?.initDataUnsafe?.start_param) {
+  } else if (tg?.initDataUnsafe?.start_param && !tg.initDataUnsafe.start_param.startsWith('session_')) {
     document.getElementById("question").value = tg.initDataUnsafe.start_param;
   }
 
@@ -515,7 +559,7 @@ function initApp() {
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initApp);
+  document.addEventListener('DOMContentLoaded', () => initApp());
 } else {
   initApp();
 }

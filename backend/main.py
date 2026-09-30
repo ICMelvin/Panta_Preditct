@@ -11,12 +11,16 @@ signed ones to Panta.
 from __future__ import annotations
 
 import os
+import uuid
+import time
 from pathlib import Path
 import logging
+from typing import Dict, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from backend.models import BuildRequest, QuoteRequest, RegisterRequest
 from backend.panta_client import PantaAPIError, PantaClient
@@ -38,6 +42,33 @@ else:
 app = FastAPI(title="PantaPredict API")
 
 _panta = PantaClient()  # reads PANTA_API_KEY from env
+
+# In-memory wallet session storage
+# HACKATHON LIMITATION: This is in-memory and not persistent. Sessions expire after 10 minutes.
+# In production, this should use Redis or a database with proper persistence.
+wallet_sessions: Dict[str, dict] = {}
+SESSION_EXPIRY_SECONDS = 600  # 10 minutes
+
+# Clean up expired sessions periodically
+def cleanup_expired_sessions():
+    current_time = time.time()
+    expired_sessions = [
+        session_id for session_id, session_data in wallet_sessions.items()
+        if current_time - session_data.get('created_at', 0) > SESSION_EXPIRY_SECONDS
+    ]
+    for session_id in expired_sessions:
+        del wallet_sessions[session_id]
+        logger.info(f"Cleaned up expired session: {session_id}")
+
+# Pydantic models for wallet session
+class WalletSessionInit(BaseModel):
+    dapp_encryption_public_key: str
+
+class WalletCallback(BaseModel):
+    session_id: str
+    phantom_encryption_public_key: str
+    encrypted_response: str
+    nonce: str
 
 
 @app.post("/api/quality-check")
@@ -120,6 +151,189 @@ def healthz():
     api_key = os.getenv("PANTA_API_KEY", "")
     mode = "sandbox" if api_key.startswith("pk_test_") else "live" if api_key.startswith("pk_live_") else "unknown"
     return {"ok": True, "mode": mode}
+
+
+@app.post("/api/wallet-session-init")
+def init_wallet_session(payload: WalletSessionInit):
+    """Initialize a wallet connection session and store the ephemeral keypair."""
+    cleanup_expired_sessions()
+    
+    session_id = str(uuid.uuid4())
+    wallet_sessions[session_id] = {
+        "dapp_encryption_public_key": payload.dapp_encryption_public_key,
+        "created_at": time.time(),
+        "wallet_address": None,
+        "ephemeral_secret_key": None  # Will be set when client provides it
+    }
+    
+    logger.info(f"Initialized wallet session: {session_id}")
+    return {"session_id": session_id}
+
+
+@app.post("/api/wallet-callback")
+def wallet_callback(payload: WalletCallback):
+    """Handle Phantom's redirect callback with encrypted response."""
+    cleanup_expired_sessions()
+    
+    session = wallet_sessions.get(payload.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    # For now, store the Phantom response data
+    # In production, this would decrypt using the stored ephemeral secret key
+    # following Phantom's nacl box protocol
+    session["phantom_encryption_public_key"] = payload.phantom_encryption_public_key
+    session["encrypted_response"] = payload.encrypted_response
+    session["nonce"] = payload.nonce
+    
+    # HACKATHON SIMPLIFICATION: 
+    # For this demo, we'll assume the response contains the wallet address
+    # In production, you'd need to implement the full nacl decryption
+    # using the stored ephemeral_secret_key
+    # For now, we'll store a placeholder and the actual wallet connection
+    # will be handled when the Mini App queries the session
+    
+    logger.info(f"Received wallet callback for session: {payload.session_id}")
+    return {"status": "success", "session_id": payload.session_id}
+
+
+@app.post("/api/wallet-callback-simulated")
+def wallet_callback_simulated(payload: dict):
+    """Simulated callback for testing - stores the actual wallet address."""
+    cleanup_expired_sessions()
+    
+    session_id = payload.get("session_id")
+    wallet_address = payload.get("wallet_address")
+    
+    if not session_id or not wallet_address:
+        raise HTTPException(status_code=400, detail="Missing session_id or wallet_address")
+    
+    session = wallet_sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    session["wallet_address"] = wallet_address
+    logger.info(f"Simulated wallet connection for session {session_id}: {wallet_address}")
+    
+    return {"status": "success", "session_id": session_id}
+
+
+@app.get("/api/wallet-session/{session_id}")
+def get_wallet_session(session_id: str):
+    """Retrieve wallet session data."""
+    cleanup_expired_sessions()
+    
+    session = wallet_sessions.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    
+    return {
+        "session_id": session_id,
+        "wallet_address": session.get("wallet_address"),
+        "created_at": session.get("created_at"),
+        "expired": (time.time() - session.get("created_at", 0)) > SESSION_EXPIRY_SECONDS
+    }
+
+
+@app.get("/wallet-callback")
+def wallet_callback_page(session_id: str = None, phantom_encryption_public_key: str = None, encrypted_response: str = None, nonce: str = None):
+    """Simple HTML page for Phantom redirect callback that processes the response."""
+    bot_username = os.getenv("TELEGRAM_BOT_USERNAME", "PantaPredictBot")
+    
+    # HACKATHON SIMPLIFICATION: 
+    # For demo purposes, we'll use phantom_encryption_public_key as the wallet address
+    # In production, this would decrypt the encrypted_response using the stored ephemeral_secret_key
+    # following Phantom's nacl box protocol to extract the actual wallet public key
+    
+    wallet_address = None
+    if session_id and phantom_encryption_public_key:
+        try:
+            # Store the Phantom response data
+            session = wallet_sessions.get(session_id)
+            if session:
+                session["phantom_encryption_public_key"] = phantom_encryption_public_key
+                session["encrypted_response"] = encrypted_response
+                session["nonce"] = nonce
+                # For demo: use phantom_encryption_public_key as wallet address
+                session["wallet_address"] = phantom_encryption_public_key
+                wallet_address = phantom_encryption_public_key
+                logger.info(f"Stored wallet callback for session {session_id}: {wallet_address}")
+        except Exception as e:
+            logger.error(f"Error processing wallet callback: {e}")
+    
+    # Use session_id from query params for the return link
+    return_link = f"https://t.me/{bot_username}"
+    if session_id:
+        return_link = f"https://t.me/{bot_username}?startapp={session_id}"
+    
+    status_text = "Wallet Connected!" if wallet_address else "Connection Complete"
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Wallet Connected</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #0a0a0f;
+                color: #f0f0f5;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                margin: 0;
+                padding: 20px;
+            }}
+            .container {{
+                text-align: center;
+                max-width: 400px;
+            }}
+            h1 {{
+                color: #7A8BA0;
+                margin-bottom: 20px;
+            }}
+            p {{
+                color: #a1a1aa;
+                margin-bottom: 30px;
+                line-height: 1.6;
+            }}
+            .wallet-info {{
+                background: #1a1a24;
+                border: 1px solid #2a2a3a;
+                border-radius: 8px;
+                padding: 12px;
+                margin-bottom: 20px;
+                font-family: monospace;
+                font-size: 12px;
+                word-break: break-all;
+            }}
+            .btn {{
+                display: inline-block;
+                background: linear-gradient(135deg, #7A8BA0, #A0785C);
+                color: white;
+                padding: 16px 32px;
+                border-radius: 8px;
+                text-decoration: none;
+                font-weight: 600;
+                transition: transform 0.2s;
+            }}
+            .btn:hover {{
+                transform: translateY(-2px);
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>✅ {status_text}</h1>
+            <p>Your Phantom wallet has been successfully connected. Tap below to return to Telegram and continue creating your prediction market.</p>
+            {'<div class="wallet-info">Wallet: ' + wallet_address[:20] + '...' + wallet_address[-8:] + '</div>' if wallet_address else ''}
+            <a href="{return_link}" class="btn">Return to Telegram</a>
+        </div>
+    </body>
+    </html>
+    """
 
 
 # Serve the Mini App static files at / (mounted AFTER all /api routes to prevent shadowing)
