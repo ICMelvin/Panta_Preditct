@@ -108,14 +108,21 @@ function connectPhantomDeepLink() {
   const dappKeyPair = solanaWeb3.Keypair.generate();
   const dappPublicKey = dappKeyPair.publicKey.toBase58();
   
-  // Get current URL for redirect
+  // Get current URL for redirect and app_url
   const currentUrl = window.location.href.split('?')[0]; // Remove existing params
   
   // Build Phantom deep link URL following their spec
-  const phantomUrl = `https://phantom.app/ul/v1/connect?dapp_encryption_public_key=${dappPublicKey}&redirect_link=${encodeURIComponent(currentUrl)}&cluster=mainnet-beta`;
+  // app_url is required for session validation
+  const phantomUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(currentUrl)}&dapp_encryption_public_key=${dappPublicKey}&redirect_link=${encodeURIComponent(currentUrl)}&cluster=mainnet-beta`;
   
-  // Open Phantom deep link
-  window.location.href = phantomUrl;
+  // Open Phantom deep link using Telegram's openLink method
+  // This opens in the system browser which may handle Android app links better
+  if (tg && tg.openLink) {
+    tg.openLink(phantomUrl);
+  } else {
+    // Fallback to window.location.href if Telegram WebApp not available
+    window.location.href = phantomUrl;
+  }
 }
 
 // Wallet connection
@@ -446,6 +453,15 @@ function initApp() {
   // Check for debug mode
   const urlParams = new URLSearchParams(window.location.search);
   debugMode = urlParams.has('debug');
+
+  // Check for Phantom redirect callback (deep-link return)
+  // Phantom returns session data in query params - would need full encryption handling in production
+  const phantomSession = urlParams.get('phantom_encryption_public_key');
+  if (phantomSession) {
+    // TODO: Handle Phantom session decryption and wallet connection
+    // For now, this is a placeholder for where the callback logic would go
+    console.log("Phantom redirect detected - session handling needed");
+  }
 
   // Load categories
   loadCategories();
