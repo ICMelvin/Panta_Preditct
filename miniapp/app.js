@@ -97,26 +97,56 @@ function updateDebugPanel() {
   panel.innerHTML = html;
 }
 
+// Detect if we're on mobile
+function isMobile() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Phantom deep-link connection for mobile
+function connectPhantomDeepLink() {
+  // Generate ephemeral keypair for session encryption
+  const dappKeyPair = solanaWeb3.Keypair.generate();
+  const dappPublicKey = dappKeyPair.publicKey.toBase58();
+  
+  // Get current URL for redirect
+  const currentUrl = window.location.href.split('?')[0]; // Remove existing params
+  
+  // Build Phantom deep link URL following their spec
+  const phantomUrl = `https://phantom.app/ul/v1/connect?dapp_encryption_public_key=${dappPublicKey}&redirect_link=${encodeURIComponent(currentUrl)}&cluster=mainnet-beta`;
+  
+  // Open Phantom deep link
+  window.location.href = phantomUrl;
+}
+
 // Wallet connection
 async function connectWallet() {
-  if (!window.solana || !window.solana.isPhantom) {
-    showToast("Phantom wallet not detected. Please install Phantom wallet and try again.", "error");
+  // Try window.solana first (desktop extension)
+  if (window.solana && window.solana.isPhantom) {
+    try {
+      showLoading("Connecting wallet...");
+      const resp = await window.solana.connect();
+      connectedWallet = resp.publicKey.toString();
+      updateWalletUI();
+      showLanding(false);
+      showToast("Wallet connected successfully!", "success");
+      return;
+    } catch (error) {
+      console.error("Wallet connection failed:", error);
+      showToast("Wallet connection cancelled or failed. Please try again.", "error");
+      hideLoading();
+      return;
+    }
+  }
+  
+  // Fall back to deep-link for mobile
+  if (isMobile()) {
+    showToast("Opening Phantom wallet...", "info");
+    connectPhantomDeepLink();
     return;
   }
-
-  try {
-    showLoading("Connecting wallet...");
-    const resp = await window.solana.connect();
-    connectedWallet = resp.publicKey.toString();
-    updateWalletUI();
-    showLanding(false);
-    showToast("Wallet connected successfully!", "success");
-  } catch (error) {
-    console.error("Wallet connection failed:", error);
-    showToast("Wallet connection cancelled or failed. Please try again.", "error");
-  } finally {
-    hideLoading();
-  }
+  
+  // Neither extension nor mobile - show error
+  showToast("Phantom wallet not detected. Please install Phantom wallet and try again.", "error");
 }
 
 function disconnectWallet() {
