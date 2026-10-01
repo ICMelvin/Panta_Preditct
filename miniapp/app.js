@@ -107,14 +107,29 @@ async function connectPhantomDeepLink() {
   try {
     showLoading("Initializing wallet connection...");
     
+    // Check if required libraries are loaded
+    if (typeof solanaWeb3 === 'undefined') {
+      throw new Error("Solana web3.js library not loaded. Check CDN.");
+    }
+    if (typeof bs58 === 'undefined') {
+      throw new Error("bs58 library not loaded. Check CDN.");
+    }
+    
     // Generate ephemeral keypair for session encryption
+    console.log("Generating ephemeral keypair...");
     const dappKeyPair = solanaWeb3.Keypair.generate();
+    console.log("Keypair generated:", dappKeyPair);
+    
     const dappPublicKey = dappKeyPair.publicKey.toBase58();
+    console.log("Public key:", dappPublicKey);
+    
     // Solana secretKey is 64 bytes (32-byte private key + 32-byte public key)
     // PyNaCl expects only the 32-byte private key, so slice to first 32 bytes
     const dappSecretKey = bs58.encode(dappKeyPair.secretKey.slice(0, 32));
+    console.log("Secret key encoded (first 32 bytes):", dappSecretKey.substring(0, 10) + "...");
     
     // Initialize wallet session on backend with both public and secret key
+    console.log("Calling /api/wallet-session-init...");
     const initRes = await fetch(`${API_BASE}/api/wallet-session-init`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -124,11 +139,16 @@ async function connectPhantomDeepLink() {
       }),
     });
     
+    console.log("Response status:", initRes.status);
+    
     if (!initRes.ok) {
-      throw new Error("Failed to initialize wallet session");
+      const errorText = await initRes.text();
+      console.error("Backend error:", errorText);
+      throw new Error(`Backend returned ${initRes.status}: ${errorText}`);
     }
     
     const { session_id } = await initRes.json();
+    console.log("Session initialized:", session_id);
     
     // Store session_id in localStorage for later retrieval
     localStorage.setItem('phantom_session_id', session_id);
@@ -141,6 +161,8 @@ async function connectPhantomDeepLink() {
     const callbackUrl = `${currentUrl}/wallet-callback?session_id=${session_id}`;
     const phantomUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(currentUrl)}&dapp_encryption_public_key=${dappPublicKey}&redirect_link=${encodeURIComponent(callbackUrl)}&cluster=mainnet-beta`;
     
+    console.log("Opening Phantom deep link...");
+    
     // Open Phantom deep link using Telegram's openLink method
     hideLoading();
     if (tg && tg.openLink) {
@@ -152,7 +174,7 @@ async function connectPhantomDeepLink() {
   } catch (error) {
     console.error("Phantom deep-link connection failed:", error);
     hideLoading();
-    showToast("Failed to initialize wallet connection. Please try again.", "error");
+    showToast(`Failed to initialize wallet connection: ${error.message}`, "error");
   }
 }
 
@@ -170,7 +192,7 @@ async function connectWallet() {
       return;
     } catch (error) {
       console.error("Wallet connection failed:", error);
-      showToast("Wallet connection cancelled or failed. Please try again.", "error");
+      showToast(`Wallet connection failed: ${error.message}`, "error");
       hideLoading();
       return;
     }
@@ -184,7 +206,7 @@ async function connectWallet() {
   }
   
   // Neither extension nor mobile - show error
-  showToast("Phantom wallet not detected. Please install Phantom wallet and try again.", "error");
+  showToast("Phantom wallet not detected. Please install Phantom wallet extension on desktop or Phantom app on mobile.", "error");
 }
 
 function disconnectWallet() {
@@ -507,7 +529,7 @@ async function initApp() {
     } catch (error) {
       console.error("Failed to fetch wallet session:", error);
       hideLoading();
-      showToast("Failed to check wallet connection. Please try again.", "error");
+      showToast(`Failed to check wallet connection: ${error.message}`, "error");
     }
   }
 
