@@ -22,7 +22,7 @@ def test_wallet_session_init():
     """Test wallet session initialization with both public and secret keys."""
     response = client.post("/api/wallet-session-init", json={
         "dapp_encryption_public_key": "test_public_key_123",
-        "dapp_secret_key": "test_secret_key_456"
+        "dapp_secret_key": base58.b58encode(b"x" * 32).decode('utf-8')  # Valid 32-byte key
     })
     assert response.status_code == 200
     data = response.json()
@@ -35,7 +35,7 @@ def test_wallet_session_retrieval():
     # First create a session with both keys
     init_response = client.post("/api/wallet-session-init", json={
         "dapp_encryption_public_key": "test_public_key_456",
-        "dapp_secret_key": "test_secret_key_789"
+        "dapp_secret_key": base58.b58encode(b"y" * 32).decode('utf-8')
     })
     session_id = init_response.json()["session_id"]
     
@@ -59,7 +59,7 @@ def test_wallet_session_expiry():
     # Create a session
     init_response = client.post("/api/wallet-session-init", json={
         "dapp_encryption_public_key": "test_public_key_789",
-        "dapp_secret_key": "test_secret_key_abc"
+        "dapp_secret_key": base58.b58encode(b"z" * 32).decode('utf-8')
     })
     session_id = init_response.json()["session_id"]
     
@@ -91,7 +91,7 @@ def test_wallet_callback_page_with_session():
 
 def test_wallet_decryption_integration():
     """Test full wallet decryption flow with mock Phantom response."""
-    # Create ephemeral keypair
+    # Create ephemeral keypair (32 bytes for PyNaCl)
     dapp_keypair = nacl.public.PrivateKey.generate()
     dapp_public_key = base58.b58encode(dapp_keypair.encode()).decode('utf-8')
     dapp_secret_key = base58.b58encode(dapp_keypair.encode()).decode('utf-8')
@@ -118,7 +118,7 @@ def test_wallet_decryption_integration():
     nonce_b58 = base58.b58encode(nonce).decode('utf-8')
     data_b58 = base58.b58encode(data).decode('utf-8')
     
-    # Initialize session
+    # Initialize session with EXACT payload shape from frontend
     init_response = client.post("/api/wallet-session-init", json={
         "dapp_encryption_public_key": dapp_public_key,
         "dapp_secret_key": dapp_secret_key
@@ -141,3 +141,19 @@ def test_wallet_decryption_integration():
     # This proves we're extracting the real wallet address, not the encryption key
     assert session_data["wallet_address"] != phantom_public_key
     assert session_data["wallet_address"] == "TestWalletPublicKey123"
+
+
+def test_wallet_session_init_invalid_secret_key_length():
+    """Test that invalid secret key length (64 bytes like Solana instead of 32 bytes for PyNaCl) is rejected."""
+    # Simulate sending a 64-byte key (like Solana's full secretKey)
+    invalid_secret_key = base58.b58encode(b"x" * 64).decode('utf-8')
+    
+    response = client.post("/api/wallet-session-init", json={
+        "dapp_encryption_public_key": "test_public_key",
+        "dapp_secret_key": invalid_secret_key
+    })
+    
+    assert response.status_code == 400
+    data = response.json()
+    assert "32 bytes" in data["detail"]
+    assert "64 bytes" in data["detail"]

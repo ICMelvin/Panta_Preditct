@@ -110,7 +110,9 @@ async function connectPhantomDeepLink() {
     // Generate ephemeral keypair for session encryption
     const dappKeyPair = solanaWeb3.Keypair.generate();
     const dappPublicKey = dappKeyPair.publicKey.toBase58();
-    const dappSecretKey = bs58.encode(dappKeyPair.secretKey);
+    // Solana secretKey is 64 bytes (32-byte private key + 32-byte public key)
+    // PyNaCl expects only the 32-byte private key, so slice to first 32 bytes
+    const dappSecretKey = bs58.encode(dappKeyPair.secretKey.slice(0, 32));
     
     // Initialize wallet session on backend with both public and secret key
     const initRes = await fetch(`${API_BASE}/api/wallet-session-init`, {

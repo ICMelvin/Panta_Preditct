@@ -69,6 +69,8 @@ def cleanup_expired_sessions():
 # Pydantic models for wallet session
 class WalletSessionInit(BaseModel):
     dapp_encryption_public_key: str
+    # NOTE: dapp_secret_key must be 32 bytes (PyNaCl format), not 64 bytes (Solana format)
+    # The frontend should slice Solana's secretKey (64 bytes) to first 32 bytes before encoding
     dapp_secret_key: str
 
 
@@ -158,6 +160,17 @@ def healthz():
 def init_wallet_session(payload: WalletSessionInit):
     """Initialize a wallet connection session and store the ephemeral keypair."""
     cleanup_expired_sessions()
+    
+    # Validate secret key length (must be 32 bytes for PyNaCl, not 64 bytes like Solana)
+    try:
+        decoded_secret = base58.b58decode(payload.dapp_secret_key)
+        if len(decoded_secret) != 32:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"dapp_secret_key must be 32 bytes (got {len(decoded_secret)} bytes). If using Solana keypair, slice secretKey to first 32 bytes."
+            )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid dapp_secret_key encoding: {str(e)}")
     
     session_id = str(uuid.uuid4())
     wallet_sessions[session_id] = {
