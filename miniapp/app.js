@@ -1,3 +1,28 @@
+const bs58 = (() => {
+  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function encode(bytes) {
+    if (bytes.length === 0) return '';
+    let digits = [0];
+    for (let i = 0; i < bytes.length; i++) {
+      let carry = bytes[i];
+      for (let j = 0; j < digits.length; j++) {
+        carry += digits[j] << 8;
+        digits[j] = carry % 58;
+        carry = (carry / 58) | 0;
+      }
+      while (carry > 0) {
+        digits.push(carry % 58);
+        carry = (carry / 58) | 0;
+      }
+    }
+    let result = '';
+    for (let i = 0; bytes[i] === 0 && i < bytes.length - 1; i++) result += '1';
+    for (let i = digits.length - 1; i >= 0; i--) result += ALPHABET[digits[i]];
+    return result;
+  }
+  return { encode };
+})();
+
 // Layer 5 — Mini App logic
 // Complete rebuild with landing page, persistent nav, and wallet-gated flow
 
