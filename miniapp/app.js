@@ -183,7 +183,7 @@ async function connectPhantomDeepLink() {
     
     // Build Phantom deep link URL with session_id in redirect_link
     // Phantom will redirect to our backend callback page with this session_id
-    const callbackUrl = `${currentUrl}/wallet-callback?session_id=${session_id}`;
+    const callbackUrl = `${currentUrl.replace(/\/$/, '')}/wallet-callback?session_id=${session_id}`;
     const phantomUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(currentUrl)}&dapp_encryption_public_key=${dappPublicKey}&redirect_link=${encodeURIComponent(callbackUrl)}&cluster=mainnet-beta`;
     
     console.log("Opening Phantom deep link...");
