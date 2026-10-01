@@ -21,6 +21,7 @@ from typing import Dict, Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from backend.models import BuildRequest, QuoteRequest, RegisterRequest
@@ -223,7 +224,7 @@ def get_wallet_session(session_id: str):
     }
 
 
-@app.get("/wallet-callback")
+@app.get("/wallet-callback", response_class=HTMLResponse)
 def wallet_callback_page(session_id: str = None, phantom_encryption_public_key: str = None, data: str = None, nonce: str = None):
     """Process Phantom wallet connection callback with real decryption."""
     bot_username = os.getenv("TELEGRAM_BOT_USERNAME", "PantaPredictBot")
