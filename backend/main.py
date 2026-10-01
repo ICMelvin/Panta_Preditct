@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import uuid
 import time
+import json
 from pathlib import Path
 import logging
 from typing import Dict, Optional
@@ -49,6 +50,11 @@ _panta = PantaClient()  # reads PANTA_API_KEY from env
 wallet_sessions: Dict[str, dict] = {}
 SESSION_EXPIRY_SECONDS = 600  # 10 minutes
 
+# PyNaCl for encryption/decryption
+import nacl.encoding
+import nacl.public
+import base58
+
 # Clean up expired sessions periodically
 def cleanup_expired_sessions():
     current_time = time.time()
@@ -63,12 +69,7 @@ def cleanup_expired_sessions():
 # Pydantic models for wallet session
 class WalletSessionInit(BaseModel):
     dapp_encryption_public_key: str
-
-class WalletCallback(BaseModel):
-    session_id: str
-    phantom_encryption_public_key: str
-    encrypted_response: str
-    nonce: str
+    dapp_secret_key: str
 
 
 @app.post("/api/quality-check")
@@ -161,40 +162,14 @@ def init_wallet_session(payload: WalletSessionInit):
     session_id = str(uuid.uuid4())
     wallet_sessions[session_id] = {
         "dapp_encryption_public_key": payload.dapp_encryption_public_key,
+        "dapp_secret_key": payload.dapp_secret_key,  # Store for decryption
         "created_at": time.time(),
         "wallet_address": None,
-        "ephemeral_secret_key": None  # Will be set when client provides it
+        "session_token": None
     }
     
     logger.info(f"Initialized wallet session: {session_id}")
     return {"session_id": session_id}
-
-
-@app.post("/api/wallet-callback")
-def wallet_callback(payload: WalletCallback):
-    """Handle Phantom's redirect callback with encrypted response."""
-    cleanup_expired_sessions()
-    
-    session = wallet_sessions.get(payload.session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found or expired")
-    
-    # For now, store the Phantom response data
-    # In production, this would decrypt using the stored ephemeral secret key
-    # following Phantom's nacl box protocol
-    session["phantom_encryption_public_key"] = payload.phantom_encryption_public_key
-    session["encrypted_response"] = payload.encrypted_response
-    session["nonce"] = payload.nonce
-    
-    # HACKATHON SIMPLIFICATION: 
-    # For this demo, we'll assume the response contains the wallet address
-    # In production, you'd need to implement the full nacl decryption
-    # using the stored ephemeral_secret_key
-    # For now, we'll store a placeholder and the actual wallet connection
-    # will be handled when the Mini App queries the session
-    
-    logger.info(f"Received wallet callback for session: {payload.session_id}")
-    return {"status": "success", "session_id": payload.session_id}
 
 
 @app.post("/api/wallet-callback-simulated")
@@ -236,37 +211,64 @@ def get_wallet_session(session_id: str):
 
 
 @app.get("/wallet-callback")
-def wallet_callback_page(session_id: str = None, phantom_encryption_public_key: str = None, encrypted_response: str = None, nonce: str = None):
-    """Simple HTML page for Phantom redirect callback that processes the response."""
+def wallet_callback_page(session_id: str = None, phantom_encryption_public_key: str = None, data: str = None, nonce: str = None):
+    """Process Phantom wallet connection callback with real decryption."""
     bot_username = os.getenv("TELEGRAM_BOT_USERNAME", "PantaPredictBot")
     
-    # HACKATHON SIMPLIFICATION: 
-    # For demo purposes, we'll use phantom_encryption_public_key as the wallet address
-    # In production, this would decrypt the encrypted_response using the stored ephemeral_secret_key
-    # following Phantom's nacl box protocol to extract the actual wallet public key
-    
     wallet_address = None
-    if session_id and phantom_encryption_public_key:
+    error_message = None
+    
+    if session_id and phantom_encryption_public_key and data and nonce:
         try:
-            # Store the Phantom response data
             session = wallet_sessions.get(session_id)
-            if session:
-                session["phantom_encryption_public_key"] = phantom_encryption_public_key
-                session["encrypted_response"] = encrypted_response
-                session["nonce"] = nonce
-                # For demo: use phantom_encryption_public_key as wallet address
-                session["wallet_address"] = phantom_encryption_public_key
-                wallet_address = phantom_encryption_public_key
-                logger.info(f"Stored wallet callback for session {session_id}: {wallet_address}")
+            if not session:
+                error_message = "Session not found or expired"
+            else:
+                # Decode base58 encoded values
+                phantom_public_key_bytes = base58.b58decode(phantom_encryption_public_key)
+                nonce_bytes = base58.b58decode(nonce)
+                data_bytes = base58.b58decode(data)
+                
+                # Decode dapp secret key from base58
+                dapp_secret_key_bytes = base58.b58decode(session["dapp_secret_key"])
+                
+                # Reconstruct keypair for decryption
+                dapp_keypair = nacl.public.PrivateKey(dapp_secret_key_bytes)
+                phantom_public_key = nacl.public.PublicKey(phantom_public_key_bytes)
+                
+                # Create Box for decryption (using dapp private key and phantom public key)
+                decrypt_box = nacl.public.Box(dapp_keypair, phantom_public_key)
+                
+                # Decrypt the data using the box
+                decrypted_data = decrypt_box.decrypt(data_bytes, nonce_bytes)
+                
+                if not decrypted_data:
+                    error_message = "Failed to decrypt wallet data"
+                else:
+                    # Parse decrypted JSON
+                    decrypted_json = json.loads(decrypted_data.decode('utf-8'))
+                    
+                    # Extract the user's public key (wallet address)
+                    wallet_address = decrypted_json.get("public_key")
+                    session_token = decrypted_json.get("session")
+                    
+                    # Store in session
+                    session["wallet_address"] = wallet_address
+                    session["session_token"] = session_token
+                    session["phantom_encryption_public_key"] = phantom_encryption_public_key
+                    
+                    logger.info(f"Successfully decrypted wallet connection for session {session_id}: {wallet_address}")
+                    
         except Exception as e:
             logger.error(f"Error processing wallet callback: {e}")
+            error_message = f"Error processing wallet connection: {str(e)}"
     
     # Use session_id from query params for the return link
     return_link = f"https://t.me/{bot_username}"
     if session_id:
         return_link = f"https://t.me/{bot_username}?startapp={session_id}"
     
-    status_text = "Wallet Connected!" if wallet_address else "Connection Complete"
+    status_text = "Wallet Connected!" if wallet_address else "Connection Failed"
     
     return f"""
     <!DOCTYPE html>
@@ -299,6 +301,10 @@ def wallet_callback_page(session_id: str = None, phantom_encryption_public_key: 
                 margin-bottom: 30px;
                 line-height: 1.6;
             }}
+            .error {{
+                color: #f43f5e;
+                margin-bottom: 20px;
+            }}
             .wallet-info {{
                 background: #1a1a24;
                 border: 1px solid #2a2a3a;
@@ -328,6 +334,7 @@ def wallet_callback_page(session_id: str = None, phantom_encryption_public_key: 
         <div class="container">
             <h1>✅ {status_text}</h1>
             <p>Your Phantom wallet has been successfully connected. Tap below to return to Telegram and continue creating your prediction market.</p>
+            {'<div class="error">' + error_message + '</div>' if error_message else ''}
             {'<div class="wallet-info">Wallet: ' + wallet_address[:20] + '...' + wallet_address[-8:] + '</div>' if wallet_address else ''}
             <a href="{return_link}" class="btn">Return to Telegram</a>
         </div>

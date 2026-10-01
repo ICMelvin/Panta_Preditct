@@ -110,13 +110,15 @@ async function connectPhantomDeepLink() {
     // Generate ephemeral keypair for session encryption
     const dappKeyPair = solanaWeb3.Keypair.generate();
     const dappPublicKey = dappKeyPair.publicKey.toBase58();
+    const dappSecretKey = bs58.encode(dappKeyPair.secretKey);
     
-    // Initialize wallet session on backend
+    // Initialize wallet session on backend with both public and secret key
     const initRes = await fetch(`${API_BASE}/api/wallet-session-init`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        dapp_encryption_public_key: dappPublicKey
+        dapp_encryption_public_key: dappPublicKey,
+        dapp_secret_key: dappSecretKey
       }),
     });
     
@@ -521,6 +523,7 @@ async function initApp() {
     }).catch(() => {
       // Not connected, show landing
       showLanding(true);
+      
     });
   } else {
     showLanding(true);
