@@ -278,9 +278,9 @@ def wallet_callback_page(session_id: str = None, phantom_encryption_public_key: 
             error_message = f"Error processing wallet connection: {str(e)}"
     
     # Use session_id from query params for the return link
-    return_link = f"https://t.me/{bot_username}"
+    return_link = f"https://t.me/{bot_username}/PPB"
     if session_id:
-        return_link = f"https://t.me/{bot_username}?start={session_id}"
+        return_link = f"https://t.me/{bot_username}/PPB?startapp={session_id}"
     
     status_text = "Wallet Connected!" if wallet_address else "Connection Failed"
     
