@@ -1,6 +1,7 @@
 """Tests for bot handlers."""
 
 import sys
+import uuid
 from pathlib import Path
 
 # Add parent directory to path to import bot modules
@@ -37,6 +38,28 @@ def mock_context():
     """Create a mock Context object for testing."""
     context = Mock(spec=ContextTypes.DEFAULT_TYPE)
     return context
+
+
+@pytest.mark.asyncio
+async def test_start_handler_with_uuid_payload_shows_reopen_button(mock_update, mock_context):
+    """Test that a Telegram deep-link /start with a UUID session payload opens the Mini App again."""
+    session_id = str(uuid.uuid4())
+    mock_context.args = [session_id]
+
+    await handlers.start(mock_update, mock_context)
+
+    mock_update.message.reply_text.assert_called_once()
+    call_kwargs = mock_update.message.reply_text.call_args.kwargs
+    assert "Wallet connected!" in mock_update.message.reply_text.call_args.args[0]
+    assert "reply_markup" in call_kwargs
+
+    keyboard = call_kwargs["reply_markup"].inline_keyboard
+    assert len(keyboard) == 1
+    assert len(keyboard[0]) == 1
+    button = keyboard[0][0]
+    assert button.text in {"Open Mini App", "Continue to Mini App"}
+    assert session_id in button.web_app.url
+    assert "tgWebAppStartParam=" in button.web_app.url
 
 
 @pytest.mark.asyncio

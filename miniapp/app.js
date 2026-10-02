@@ -127,6 +127,11 @@ function isMobile() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
+function isSessionStartParam(value) {
+  if (!value) return false;
+  return value.startsWith('session_') || /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(value);
+}
+
 // Phantom deep-link connection for mobile using backend-mediated flow
 async function connectPhantomDeepLink() {
   try {
@@ -534,7 +539,7 @@ async function initApp() {
 
   // Check for wallet session from start_param (returning from Phantom connection)
   const startParam = tg?.initDataUnsafe?.start_param || urlParams.get('tgWebAppStartParam');
-  if (startParam && startParam.startsWith('session_')) {
+  if (startParam && isSessionStartParam(startParam)) {
     // Query backend for wallet session
     try {
       showLoading("Checking wallet connection...");
@@ -582,7 +587,7 @@ async function initApp() {
   const questionParam = urlParams.get('q');
   if (questionParam) {
     document.getElementById("question").value = questionParam;
-  } else if (tg?.initDataUnsafe?.start_param && !tg.initDataUnsafe.start_param.startsWith('session_')) {
+  } else if (tg?.initDataUnsafe?.start_param && !isSessionStartParam(tg.initDataUnsafe.start_param)) {
     document.getElementById("question").value = tg.initDataUnsafe.start_param;
   }
 

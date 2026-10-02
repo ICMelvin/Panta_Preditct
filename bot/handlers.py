@@ -13,6 +13,7 @@ import os
 import sys
 import asyncio
 import logging
+import uuid
 from pathlib import Path
 from functools import wraps
 from urllib.parse import quote
@@ -139,7 +140,37 @@ async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await safe_reply_text(update.message, f"Quote received: {market_quote.raw}")
 
 
+def is_uuid_like(value: str | None) -> bool:
+    """Return True for a UUID-shaped session ID, which is how wallet sessions are created."""
+    if not value:
+        return False
+    try:
+        uuid.UUID(str(value))
+        return True
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    payload = context.args[0] if context.args else None
+
+    if payload and is_uuid_like(payload):
+        session_id = str(payload)
+        encoded_start_param = quote(session_id, safe='')
+        mini_app_url = f"{MINIAPP_URL}?tgWebAppStartParam={encoded_start_param}"
+        keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton(
+                "Open Mini App",
+                web_app=WebAppInfo(url=mini_app_url),
+            )]]
+        )
+        await safe_reply_text(
+            update.message,
+            "Wallet connected! Tap below to continue creating your market:",
+            reply_markup=keyboard,
+        )
+        return
+
     await safe_reply_text(
         update.message,
         "PantaPredict — turn a chat argument into a real market.\n"
