@@ -280,7 +280,7 @@ def wallet_callback_page(session_id: str = None, phantom_encryption_public_key: 
     # Use session_id from query params for the return link
     return_link = f"https://t.me/{bot_username}"
     if session_id:
-        return_link = f"https://t.me/{bot_username}?startapp={session_id}"
+        return_link = f"https://t.me/{bot_username}?start={session_id}"
     
     status_text = "Wallet Connected!" if wallet_address else "Connection Failed"
     
