@@ -116,6 +116,7 @@ def build(payload: BuildRequest):
             create_id=payload.create_id,
             wallet=payload.wallet,
         )
+	logger.info(f"RAW Panta build response: {result}")
     except PantaAPIError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail)
     return result
