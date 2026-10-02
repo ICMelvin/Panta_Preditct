@@ -566,7 +566,9 @@ async function initApp() {
   // Load categories
   loadCategories();
 
-  // Check if wallet is already connected ( Phantom persists session)
+  // Check if wallet is already connected (desktop Phantom extension persists session)
+// Skip this entirely if we already connected via the mobile session flow above
+if (!connectedWallet) {
   if (window.solana && window.solana.isPhantom) {
     window.solana.connect({ onlyIfTrusted: false }).then(resp => {
       if (resp) {
@@ -575,13 +577,12 @@ async function initApp() {
         showLanding(false);
       }
     }).catch(() => {
-      // Not connected, show landing
       showLanding(true);
-      
     });
   } else {
     showLanding(true);
   }
+}
 
   // Pre-fill question from Telegram start_param or URL parameter
   const questionParam = urlParams.get('q');
