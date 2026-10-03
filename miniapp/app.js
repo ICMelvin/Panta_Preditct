@@ -430,20 +430,41 @@ form.addEventListener("submit", async (e) => {
 
     const buildData = await buildRes.json();
 
-    // 3. Have the wallet sign the returned unsigned transaction
-    if (!buildData.transaction) {
-      throw new Error("No transaction returned from build step");
+    // Check if response is from Panta sandbox test mode BEFORE checking for transaction
+    const isSandbox =
+      buildData.buildFingerprint === "sandbox" ||
+      Boolean(buildData.disclaimer) ||
+      (typeof buildData.disclaimer === "string" &&
+        buildData.disclaimer.includes("Test mode"));
+
+    let signature = "";
+
+    if (isSandbox) {
+      // SANDBOX MODE: Panta pk_test_ sandbox returns an empty transaction field and a disclaimer.
+      // We skip wallet-signing entirely (don't attempt to sign an empty string) and use a placeholder signature.
+      // NOTE: This branch only exists for sandbox testing with Panta's pk_test_ keys and MUST NEVER be used in live mode.
+      showToast(
+        "✅ Sandbox mode: transaction simulated successfully. (Live mode would broadcast this to Solana mainnet.)",
+        "success",
+      );
+      signature = "sandbox-simulated-signature";
+    } else {
+      // LIVE MODE: Real pk_live_ response MUST return a non-empty unsigned transaction to sign
+      if (!buildData.transaction) {
+        throw new Error("No transaction returned from build step");
+      }
+
+      // Decode base64 transaction
+      const transactionBytes = Uint8Array.from(
+        atob(buildData.transaction),
+        (c) => c.charCodeAt(0),
+      );
+
+      // Sign using Phantom's signTransaction method
+      const signedTransaction =
+        await window.solana.signTransaction(transactionBytes);
+      signature = bs58.encode(signedTransaction.signature);
     }
-
-    // Decode base64 transaction
-    const transactionBytes = Uint8Array.from(atob(buildData.transaction), (c) =>
-      c.charCodeAt(0),
-    );
-
-    // Sign using Phantom's signTransaction method
-    const signedTransaction =
-      await window.solana.signTransaction(transactionBytes);
-    const signature = bs58.encode(signedTransaction.signature);
 
     // 4. Call POST /api/register with the signature
     const registerRes = await fetch(`${API_BASE}/api/register`, {
@@ -568,8 +589,29 @@ async function loadMarketDetails(marketId) {
   }
 }
 
+// Check healthz mode to set SANDBOX MODE badge
+async function checkHealthAndMode() {
+  try {
+    const res = await fetch(`${API_BASE}/healthz`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.mode === "sandbox") {
+        const badge = document.getElementById("sandbox-badge");
+        if (badge) {
+          badge.classList.remove("hidden");
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to check healthz mode:", err);
+  }
+}
+
 // Initialize app
 async function initApp() {
+  // Check health and mode
+  checkHealthAndMode();
+
   // Check for debug mode
   const urlParams = new URLSearchParams(window.location.search);
   debugMode = urlParams.has("debug");

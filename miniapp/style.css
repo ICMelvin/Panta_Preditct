@@ -89,6 +89,24 @@ body {
   color: var(--text-primary);
 }
 
+.sandbox-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sandbox-badge.hidden {
+  display: none;
+}
+
 .nav-wallet {
   position: relative;
 }
