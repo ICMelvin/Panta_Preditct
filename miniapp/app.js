@@ -1,7 +1,7 @@
 const bs58 = (() => {
-  const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
   function encode(bytes) {
-    if (bytes.length === 0) return '';
+    if (bytes.length === 0) return "";
     let digits = [0];
     for (let i = 0; i < bytes.length; i++) {
       let carry = bytes[i];
@@ -15,8 +15,8 @@ const bs58 = (() => {
         carry = (carry / 58) | 0;
       }
     }
-    let result = '';
-    for (let i = 0; bytes[i] === 0 && i < bytes.length - 1; i++) result += '1';
+    let result = "";
+    for (let i = 0; bytes[i] === 0 && i < bytes.length - 1; i++) result += "1";
     for (let i = digits.length - 1; i >= 0; i--) result += ALPHABET[digits[i]];
     return result;
   }
@@ -64,7 +64,7 @@ const loadingText = document.getElementById("loading-text");
 const toastContainer = document.getElementById("toast-container");
 
 // Global error handlers
-window.onerror = function(message, source, lineno, colno, error) {
+window.onerror = function (message, source, lineno, colno, error) {
   const errorInfo = `${message} (${source}:${lineno})`;
   errors.push(errorInfo);
   showToast(errorInfo, "error");
@@ -72,7 +72,7 @@ window.onerror = function(message, source, lineno, colno, error) {
   console.error(error);
 };
 
-window.addEventListener('unhandledrejection', function(event) {
+window.addEventListener("unhandledrejection", function (event) {
   const errorInfo = `Promise rejected: ${event.reason}`;
   errors.push(errorInfo);
   showToast(errorInfo, "error");
@@ -86,7 +86,7 @@ function showToast(message, type = "info") {
   toast.className = `toast ${type}`;
   toast.textContent = message;
   toastContainer.appendChild(toast);
-  
+
   setTimeout(() => {
     toast.style.opacity = "0";
     setTimeout(() => toast.remove(), 300);
@@ -105,59 +105,69 @@ function hideLoading() {
 
 // Debug panel
 function updateDebugPanel() {
-  let panel = document.getElementById('debug-panel');
+  let panel = document.getElementById("debug-panel");
   if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'debug-panel';
+    panel = document.createElement("div");
+    panel.id = "debug-panel";
     document.body.appendChild(panel);
   }
 
-  let html = '<strong>Debug Panel</strong><br>';
-  html += `Wallet: ${connectedWallet || 'Not connected'}<br>`;
+  let html = "<strong>Debug Panel</strong><br>";
+  html += `Wallet: ${connectedWallet || "Not connected"}<br>`;
   html += `Errors (${errors.length}):<br>`;
-  errors.slice(-5).forEach(err => {
+  errors.slice(-5).forEach((err) => {
     html += `- ${err}<br>`;
   });
-  html += `<br>Categories: ${categories.join(', ')}`;
+  html += `<br>Categories: ${categories.join(", ")}`;
   panel.innerHTML = html;
 }
 
 // Detect if we're on mobile
 function isMobile() {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent,
+  );
 }
 
 function isSessionStartParam(value) {
   if (!value) return false;
-  return value.startsWith('session_') || /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(value);
+  return (
+    value.startsWith("session_") ||
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(
+      value,
+    )
+  );
 }
 
 // Phantom deep-link connection for mobile using backend-mediated flow
 async function connectPhantomDeepLink() {
   try {
     showLoading("Initializing wallet connection...");
-    
+
     // Check if required libraries are loaded
-    if (typeof solanaWeb3 === 'undefined') {
+    if (typeof solanaWeb3 === "undefined") {
       throw new Error("Solana web3.js library not loaded. Check CDN.");
     }
-    if (typeof bs58 === 'undefined') {
+    if (typeof bs58 === "undefined") {
       throw new Error("bs58 library not loaded. Check CDN.");
     }
-    
+
     // Generate ephemeral keypair for session encryption
     console.log("Generating ephemeral keypair...");
     const dappKeyPair = nacl.box.keyPair();
     console.log("Keypair generated:", dappKeyPair);
-    
+
     const dappPublicKey = bs58.encode(dappKeyPair.publicKey);
     console.log("Public key:", dappPublicKey);
-    
+
     // Solana secretKey is 64 bytes (32-byte private key + 32-byte public key)
     // PyNaCl expects only the 32-byte private key, so slice to first 32 bytes
     const dappSecretKey = bs58.encode(dappKeyPair.secretKey);
-    console.log("Secret key encoded (first 32 bytes):", dappSecretKey.substring(0, 10) + "...");
-    
+    console.log(
+      "Secret key encoded (first 32 bytes):",
+      dappSecretKey.substring(0, 10) + "...",
+    );
+
     // Initialize wallet session on backend with both public and secret key
     console.log("Calling /api/wallet-session-init...");
     const initRes = await fetch(`${API_BASE}/api/wallet-session-init`, {
@@ -165,34 +175,34 @@ async function connectPhantomDeepLink() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         dapp_encryption_public_key: dappPublicKey,
-        dapp_secret_key: dappSecretKey
+        dapp_secret_key: dappSecretKey,
       }),
     });
-    
+
     console.log("Response status:", initRes.status);
-    
+
     if (!initRes.ok) {
       const errorText = await initRes.text();
       console.error("Backend error:", errorText);
       throw new Error(`Backend returned ${initRes.status}: ${errorText}`);
     }
-    
+
     const { session_id } = await initRes.json();
     console.log("Session initialized:", session_id);
-    
+
     // Store session_id in localStorage for later retrieval
-    localStorage.setItem('phantom_session_id', session_id);
-    
+    localStorage.setItem("phantom_session_id", session_id);
+
     // Get current URL for redirect
-    const currentUrl = window.location.href.split('?')[0]; // Remove existing params
-    
+    const currentUrl = window.location.href.split("?")[0]; // Remove existing params
+
     // Build Phantom deep link URL with session_id in redirect_link
     // Phantom will redirect to our backend callback page with this session_id
-    const callbackUrl = `${currentUrl.replace(/\/$/, '')}/wallet-callback?session_id=${session_id}`;
+    const callbackUrl = `${currentUrl.replace(/\/$/, "")}/wallet-callback?session_id=${session_id}`;
     const phantomUrl = `https://phantom.app/ul/v1/connect?app_url=${encodeURIComponent(currentUrl)}&dapp_encryption_public_key=${dappPublicKey}&redirect_link=${encodeURIComponent(callbackUrl)}&cluster=mainnet-beta`;
-    
+
     console.log("Opening Phantom deep link...");
-    
+
     // Open Phantom deep link using Telegram's openLink method
     hideLoading();
     if (tg && tg.openLink) {
@@ -204,7 +214,10 @@ async function connectPhantomDeepLink() {
   } catch (error) {
     console.error("Phantom deep-link connection failed:", error);
     hideLoading();
-    showToast(`Failed to initialize wallet connection: ${error.message}`, "error");
+    showToast(
+      `Failed to initialize wallet connection: ${error.message}`,
+      "error",
+    );
   }
 }
 
@@ -227,16 +240,19 @@ async function connectWallet() {
       return;
     }
   }
-  
+
   // Fall back to deep-link for mobile
   if (isMobile()) {
     showToast("Opening Phantom wallet...", "info");
     connectPhantomDeepLink();
     return;
   }
-  
+
   // Neither extension nor mobile - show error
-  showToast("Phantom wallet not detected. Please install Phantom wallet extension on desktop or Phantom app on mobile.", "error");
+  showToast(
+    "Phantom wallet not detected. Please install Phantom wallet extension on desktop or Phantom app on mobile.",
+    "error",
+  );
 }
 
 function disconnectWallet() {
@@ -282,6 +298,9 @@ function showMarketView() {
 
 // Attach DOM event listeners
 landingConnectBtn.addEventListener("click", connectWallet);
+document.querySelectorAll(".connect-wallet-cta").forEach((button) => {
+  button.addEventListener("click", connectWallet);
+});
 walletBtn.addEventListener("click", () => {
   if (connectedWallet) {
     walletDropdown.classList.toggle("hidden");
@@ -301,7 +320,10 @@ document.addEventListener("click", (e) => {
 checkBtn.addEventListener("click", async () => {
   const question = document.getElementById("question").value;
   const sourcesText = document.getElementById("sources_of_truth").value;
-  const sources = sourcesText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+  const sources = sourcesText
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
   try {
     const res = await fetch(`${API_BASE}/api/quality-check`, {
@@ -318,9 +340,12 @@ checkBtn.addEventListener("click", async () => {
     renderChecks(data.checks);
     lastGatePassed = data.passed;
     connectBtn.disabled = !data.passed;
-    
+
     if (data.passed) {
-      showToast("Quality checks passed! You can now create the market.", "success");
+      showToast(
+        "Quality checks passed! You can now create the market.",
+        "success",
+      );
     } else {
       showToast("Quality checks failed. Please fix the issues above.", "error");
     }
@@ -351,7 +376,10 @@ form.addEventListener("submit", async (e) => {
     const question = document.getElementById("question").value;
     const resolutionRule = document.getElementById("resolution_rule").value;
     const sourcesText = document.getElementById("sources_of_truth").value;
-    const sourcesOfTruth = sourcesText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+    const sourcesOfTruth = sourcesText
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
     const category = document.getElementById("category").value;
     const imageUrl = imageUrlInput.value || imageSelect.value || null;
     const endDate = document.getElementById("end_date").value;
@@ -408,10 +436,13 @@ form.addEventListener("submit", async (e) => {
     }
 
     // Decode base64 transaction
-    const transactionBytes = Uint8Array.from(atob(buildData.transaction), c => c.charCodeAt(0));
+    const transactionBytes = Uint8Array.from(atob(buildData.transaction), (c) =>
+      c.charCodeAt(0),
+    );
 
     // Sign using Phantom's signTransaction method
-    const signedTransaction = await window.solana.signTransaction(transactionBytes);
+    const signedTransaction =
+      await window.solana.signTransaction(transactionBytes);
     const signature = bs58.encode(signedTransaction.signature);
 
     // 4. Call POST /api/register with the signature
@@ -432,20 +463,24 @@ form.addEventListener("submit", async (e) => {
     const registerData = await registerRes.json();
 
     // 5. Show success
-    showToast(`Market created successfully! Create ID: ${currentCreateId}`, "success");
+    showToast(
+      `Market created successfully! Create ID: ${currentCreateId}`,
+      "success",
+    );
     tg?.close();
-
   } catch (error) {
     console.error("Market creation failed:", error);
     let errorMessage = error.message;
-    
+
     // Provide specific error messages
     if (error.message.includes("signTransaction")) {
-      errorMessage = "Transaction signing failed. Please approve the transaction in your wallet.";
+      errorMessage =
+        "Transaction signing failed. Please approve the transaction in your wallet.";
     } else if (error.message.includes("No transaction")) {
-      errorMessage = "No transaction was returned from the build step. Please try again.";
+      errorMessage =
+        "No transaction was returned from the build step. Please try again.";
     }
-    
+
     showToast(`Error: ${errorMessage}`, "error");
     connectBtn.disabled = false;
     connectBtn.textContent = "Create Market";
@@ -484,7 +519,7 @@ async function loadCategories() {
     if (res.ok) {
       categories = await res.json();
       categorySelect.innerHTML = '<option value="">Select a category</option>';
-      categories.forEach(cat => {
+      categories.forEach((cat) => {
         const option = document.createElement("option");
         option.value = cat;
         option.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
@@ -509,7 +544,9 @@ async function loadMarketDetails(marketId) {
       const market = await res.json();
       const yesPrice = market.yesPrice || market.primaryYesPrice;
       const noPrice = market.noPrice || market.primaryNoPrice;
-      const priceText = yesPrice ? `Yes: ${yesPrice} | No: ${noPrice}` : "No live price yet";
+      const priceText = yesPrice
+        ? `Yes: ${yesPrice} | No: ${noPrice}`
+        : "No live price yet";
 
       marketDetails.innerHTML = `
         <p><strong>Question:</strong> <span id="market-question"></span></p>
@@ -535,15 +572,18 @@ async function loadMarketDetails(marketId) {
 async function initApp() {
   // Check for debug mode
   const urlParams = new URLSearchParams(window.location.search);
-  debugMode = urlParams.has('debug');
+  debugMode = urlParams.has("debug");
 
   // Check for wallet session from start_param (returning from Phantom connection)
-  const startParam = tg?.initDataUnsafe?.start_param || urlParams.get('tgWebAppStartParam');
+  const startParam =
+    tg?.initDataUnsafe?.start_param || urlParams.get("tgWebAppStartParam");
   if (startParam && isSessionStartParam(startParam)) {
     // Query backend for wallet session
     try {
       showLoading("Checking wallet connection...");
-      const sessionRes = await fetch(`${API_BASE}/api/wallet-session/${startParam}`);
+      const sessionRes = await fetch(
+        `${API_BASE}/api/wallet-session/${startParam}`,
+      );
       if (sessionRes.ok) {
         const sessionData = await sessionRes.json();
         if (sessionData.wallet_address && !sessionData.expired) {
@@ -552,7 +592,10 @@ async function initApp() {
           showLanding(false);
           showToast("Wallet connected!", "success");
         } else {
-          showToast("Wallet session expired or not found. Please connect again.", "error");
+          showToast(
+            "Wallet session expired or not found. Please connect again.",
+            "error",
+          );
         }
       }
       hideLoading();
@@ -567,33 +610,39 @@ async function initApp() {
   loadCategories();
 
   // Check if wallet is already connected (desktop Phantom extension persists session)
-// Skip this entirely if we already connected via the mobile session flow above
-if (!connectedWallet) {
-  if (window.solana && window.solana.isPhantom) {
-    window.solana.connect({ onlyIfTrusted: false }).then(resp => {
-      if (resp) {
-        connectedWallet = resp.publicKey.toString();
-        updateWalletUI();
-        showLanding(false);
-      }
-    }).catch(() => {
+  // Skip this entirely if we already connected via the mobile session flow above
+  if (!connectedWallet) {
+    if (window.solana && window.solana.isPhantom) {
+      window.solana
+        .connect({ onlyIfTrusted: false })
+        .then((resp) => {
+          if (resp) {
+            connectedWallet = resp.publicKey.toString();
+            updateWalletUI();
+            showLanding(false);
+          }
+        })
+        .catch(() => {
+          showLanding(true);
+        });
+    } else {
       showLanding(true);
-    });
-  } else {
-    showLanding(true);
+    }
   }
-}
 
   // Pre-fill question from Telegram start_param or URL parameter
-  const questionParam = urlParams.get('q');
+  const questionParam = urlParams.get("q");
   if (questionParam) {
     document.getElementById("question").value = questionParam;
-  } else if (tg?.initDataUnsafe?.start_param && !isSessionStartParam(tg.initDataUnsafe.start_param)) {
+  } else if (
+    tg?.initDataUnsafe?.start_param &&
+    !isSessionStartParam(tg.initDataUnsafe.start_param)
+  ) {
     document.getElementById("question").value = tg.initDataUnsafe.start_param;
   }
 
   // Check if opened via trade button (market parameter)
-  const marketId = urlParams.get('market');
+  const marketId = urlParams.get("market");
   if (marketId) {
     showMarketView();
     loadMarketDetails(marketId);
@@ -616,8 +665,8 @@ if (!connectedWallet) {
 }
 
 // Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => initApp());
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => initApp());
 } else {
   initApp();
 }

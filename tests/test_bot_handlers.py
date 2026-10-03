@@ -1,5 +1,11 @@
 """Tests for bot handlers."""
 
+from bot import handlers
+import os
+from telegram.ext import ContextTypes
+from telegram import Update, Message, User, Chat
+import pytest
+from unittest.mock import Mock, AsyncMock, patch
 import sys
 import uuid
 from pathlib import Path
@@ -7,17 +13,11 @@ from pathlib import Path
 # Add parent directory to path to import bot modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from unittest.mock import Mock, AsyncMock, patch
-import pytest
-from telegram import Update, Message, User, Chat
-from telegram.ext import ContextTypes
-import os
 
 # Set environment variable before importing handlers
 os.environ["TELEGRAM_MINIAPP_URL"] = "https://test.example.com"
 
 # Import handlers after environment is set
-from bot import handlers
 
 
 @pytest.fixture
@@ -66,9 +66,9 @@ async def test_start_handler_with_uuid_payload_shows_reopen_button(mock_update, 
 async def test_predict_handler_no_args(mock_update, mock_context):
     """Test that predict handler with no args shows usage message."""
     mock_context.args = []
-    
+
     await handlers.predict(mock_update, mock_context)
-    
+
     # Should reply with usage message
     mock_update.message.reply_text.assert_called_once()
     call_args = mock_update.message.reply_text.call_args[0][0]
@@ -78,8 +78,9 @@ async def test_predict_handler_no_args(mock_update, mock_context):
 @pytest.mark.asyncio
 async def test_predict_handler_with_question_no_unboundlocalerror(mock_update, mock_context):
     """Test that predict handler with a valid question does NOT raise UnboundLocalError."""
-    mock_context.args = ["Will", "Bitcoin", "reach", "$100k", "by", "end", "of", "2026?", "per", "CoinDesk"]
-    
+    mock_context.args = ["Will", "Bitcoin", "reach",
+                         "$100k", "by", "end", "of", "2026?", "per", "CoinDesk"]
+
     # This should NOT raise UnboundLocalError
     try:
         await handlers.predict(mock_update, mock_context)
@@ -93,9 +94,9 @@ async def test_predict_handler_with_question_no_unboundlocalerror(mock_update, m
 async def test_predict_handler_invalid_question(mock_update, mock_context):
     """Test that predict handler with invalid question (no deadline) shows quality gate failure."""
     mock_context.args = ["Will", "crypto", "go", "up", "soon?"]
-    
+
     await handlers.predict(mock_update, mock_context)
-    
+
     # Should reply with quality gate failure message
     mock_update.message.reply_text.assert_called_once()
     call_args = mock_update.message.reply_text.call_args[0][0]

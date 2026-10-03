@@ -8,6 +8,12 @@ so the bot works even before the Mini App exists.
 """
 
 from __future__ import annotations
+from dotenv import load_dotenv
+from backend.quality_gate import run_quality_gate
+from backend.panta_client import PantaClient
+from telegram.error import NetworkError, TimedOut
+from telegram.ext import ContextTypes, CallbackQueryHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 
 import os
 import sys
@@ -21,16 +27,9 @@ from urllib.parse import quote
 # Add parent directory to path to load backend modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
-from telegram.ext import ContextTypes, CallbackQueryHandler
-from telegram.error import NetworkError, TimedOut
-
-from backend.panta_client import PantaClient
-from backend.quality_gate import run_quality_gate
 
 # Load environment variables before evaluating MINIAPP_URL
 # This is needed because handlers.py is imported before bot.py loads the environment
-from dotenv import load_dotenv
 env_path = Path(__file__).parent.parent / ".env"
 if env_path.exists():
     load_dotenv(env_path, override=True)
@@ -42,12 +41,14 @@ logger = logging.getLogger(__name__)
 
 # Log which path will be used
 if MINIAPP_URL:
-    logger.info(f"MINIAPP_URL is set: {MINIAPP_URL} -> Using Mini App button path")
+    logger.info(
+        f"MINIAPP_URL is set: {MINIAPP_URL} -> Using Mini App button path")
 else:
     logger.info("MINIAPP_URL is not set -> Using fallback quote_market path")
 
 # Initialize Panta client lazily to ensure env vars are loaded
 _panta = None
+
 
 def get_panta_client():
     global _panta
@@ -68,10 +69,12 @@ def retry_on_network_error(max_attempts=3, backoff=1.0):
                 except (NetworkError, TimedOut) as e:
                     last_error = e
                     if attempt < max_attempts - 1:
-                        logger.warning(f"Network error on attempt {attempt + 1}/{max_attempts}, retrying in {backoff}s...")
+                        logger.warning(
+                            f"Network error on attempt {attempt + 1}/{max_attempts}, retrying in {backoff}s...")
                         await asyncio.sleep(backoff)
                     else:
-                        logger.error(f"Failed after {max_attempts} attempts: {e}")
+                        logger.error(
+                            f"Failed after {max_attempts} attempts: {e}")
                         raise
             raise last_error
         return wrapper
@@ -227,7 +230,8 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 keyboard = InlineKeyboardMarkup(
                     [[InlineKeyboardButton(
                         "Trade this market",
-                        web_app=WebAppInfo(url=f"{MINIAPP_URL}?market={encoded_create_id}"),
+                        web_app=WebAppInfo(
+                            url=f"{MINIAPP_URL}?market={encoded_create_id}"),
                     )]]
                 )
                 await safe_reply_text(

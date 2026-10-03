@@ -1,137 +1,348 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PantaPredict</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
-  
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <!-- Persistent Top Navigation -->
-  <nav id="nav-bar">
-    <div class="nav-content">
-      <div class="nav-brand">
-        <img src="assets/logo.png" alt="PantaPredict Logo" class="logo-icon" />
-        <span class="brand-name">PantaPredict</span>
-      </div>
-      <div class="nav-wallet">
-        <button id="wallet-btn" class="wallet-btn">
-          <span id="wallet-text">Connect Wallet</span>
-          <span id="wallet-indicator" class="wallet-indicator"></span>
-        </button>
-        <div id="wallet-dropdown" class="wallet-dropdown hidden">
-          <button id="disconnect-btn">Disconnect</button>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PantaPredict</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tweetnacl@1.0.3/nacl-fast.min.js"></script>
+
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- Persistent Top Navigation -->
+    <nav id="nav-bar">
+      <div class="nav-content">
+        <div class="nav-brand">
+          <img
+            src="assets/logo.png"
+            alt="PantaPredict Logo"
+            class="logo-icon"
+          />
+          <span class="brand-name">PantaPredict</span>
         </div>
-      </div>
-    </div>
-  </nav>
-
-  <main id="app">
-    <!-- Landing Page -->
-    <section id="landing-page" class="page">
-      <div class="landing-content">
-        <div class="landing-hero">
-          <img src="assets/logo.png" alt="PantaPredict Logo" class="landing-icon" />
-          <h1 class="landing-title">Turn Chat Predictions into Tradeable Markets</h1>
-          <p class="landing-subtitle">Create real prediction markets from Telegram conversations. Powered by Panta on Solana.</p>
-        </div>
-        <button id="landing-connect-btn" class="btn-primary btn-large">
-          Connect Wallet
-        </button>
-      </div>
-    </section>
-
-    <!-- Prediction Form (gated behind wallet connection) -->
-    <section id="form-page" class="page hidden">
-      <div class="form-container">
-        <h2 class="form-title">Create Market</h2>
-        
-        <form id="create-form">
-          <label>
-            <span class="field-label">QUESTION</span>
-            <input type="text" id="question" required placeholder="Will Bitcoin reach $100k by end of 2026?" />
-          </label>
-
-          <label>
-            <span class="field-label">RESOLUTION RULE</span>
-            <textarea id="resolution_rule" required placeholder="How will this be resolved? (e.g., Bitcoin reaches $100,000 USD at any point before December 31, 2026, according to CoinMarketCap data)"></textarea>
-          </label>
-
-          <label>
-            <span class="field-label">SOURCES OF TRUTH</span>
-            <span class="field-hint">URLs, one per line</span>
-            <textarea id="sources_of_truth" required placeholder="https://coinmarketcap.com&#10;https://coingecko.com"></textarea>
-          </label>
-
-          <label>
-            <span class="field-label">CATEGORY</span>
-            <select id="category" required>
-              <option value="">Loading categories...</option>
-            </select>
-          </label>
-
-          <label>
-            <span class="field-label">IMAGE</span>
-            <select id="image_select">
-              <option value="">Select an image</option>
-              <option value="https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=400">Bitcoin/Crypto</option>
-              <option value="https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400">Sports</option>
-              <option value="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=400">Politics</option>
-              <option value="https://images.unsplash.com/photo-161197476270-ca1258634369?w=400">Technology</option>
-            </select>
-            <input type="url" id="image_url" placeholder="Or enter custom image URL" />
-          </label>
-
-          <label>
-            <span class="field-label">END DATE</span>
-            <input type="date" id="end_date" required />
-          </label>
-
-          <label>
-            <span class="field-label">RESOLUTION DATE</span>
-            <input type="date" id="resolution_date" required />
-          </label>
-
-          <div id="quality-checks"></div>
-
-          <div class="form-actions">
-            <button type="button" id="check-btn" class="btn-secondary">Check Quality</button>
-            <button type="submit" id="connect-btn" class="btn-primary" disabled>
-              Create Market
-            </button>
+        <div class="nav-wallet">
+          <button id="wallet-btn" class="wallet-btn">
+            <span id="wallet-text">Connect Wallet</span>
+            <span id="wallet-indicator" class="wallet-indicator"></span>
+          </button>
+          <div id="wallet-dropdown" class="wallet-dropdown hidden">
+            <button id="disconnect-btn">Disconnect</button>
           </div>
-        </form>
+        </div>
       </div>
-    </section>
+    </nav>
 
-    <!-- Market View -->
-    <section id="market-view" class="page hidden">
-      <div class="form-container">
-        <h2 class="form-title">Market Details</h2>
-        <div id="market-details"></div>
-        <button id="back-btn" class="btn-secondary">Back to Create</button>
+    <main id="app">
+      <!-- Landing Page -->
+      <section id="landing-page" class="page">
+        <div class="landing-content">
+          <div class="landing-hero">
+            <img
+              src="assets/logo.png"
+              alt="PantaPredict Logo"
+              class="landing-icon"
+            />
+            <h1 class="landing-title">
+              Turn Chat Predictions into Tradeable Markets
+            </h1>
+            <p class="landing-subtitle">
+              Create real prediction markets from Telegram conversations.
+              Powered by Panta on Solana.
+            </p>
+          </div>
+
+          <section class="info-section" aria-labelledby="how-it-works-title">
+            <h2 id="how-it-works-title" class="section-heading">
+              HOW IT WORKS
+            </h2>
+            <div class="steps-grid">
+              <div class="info-step">
+                <div class="step-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path
+                      d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v7A2.5 2.5 0 0 1 16.5 16H10l-5 4v-13.5Z"
+                    />
+                  </svg>
+                </div>
+                <div class="step-copy">
+                  <span class="step-number">1</span>
+                  <p>Spot a prediction in your group chat</p>
+                </div>
+              </div>
+              <div class="info-step">
+                <div class="step-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path
+                      d="M8 8h8v8H8zM5 5h2v2H5zm12 0h2v2h-2zM5 17h2v2H5zm12 0h2v2h-2zM9 2h6v2H9zm0 18h6v2H9z"
+                    />
+                  </svg>
+                </div>
+                <div class="step-copy">
+                  <span class="step-number">2</span>
+                  <p>Type /predict and we check it's resolvable</p>
+                </div>
+              </div>
+              <div class="info-step">
+                <div class="step-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path d="M4 13.5h8.5L14 17l6-10-3.5 2.5H8L4 13.5Z" />
+                  </svg>
+                </div>
+                <div class="step-copy">
+                  <span class="step-number">3</span>
+                  <p>Connect your wallet and it goes live on Panta</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="info-section"
+            aria-labelledby="why-pantapredict-title"
+          >
+            <h2 id="why-pantapredict-title" class="section-heading">
+              WHY PANTAPREDICT
+            </h2>
+            <ul class="benefit-list">
+              <li class="benefit-item">
+                <div class="benefit-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M6 18L18 6M8 6h10v10" />
+                  </svg>
+                </div>
+                <div>
+                  <strong>No more unresolved bets</strong
+                  ><span>Keep every prediction clear and actionable.</span>
+                </div>
+              </li>
+              <li class="benefit-item">
+                <div class="benefit-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 2v20M5 7.5h14M5 16.5h14" />
+                  </svg>
+                </div>
+                <div>
+                  <strong>Real money, real stakes</strong
+                  ><span
+                    >Markets settle with actual value, not chat guesses.</span
+                  >
+                </div>
+              </li>
+              <li class="benefit-item">
+                <div class="benefit-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M4 12h16M12 4v16M4 4l16 16" />
+                  </svg>
+                </div>
+                <div>
+                  <strong>Built on Solana via Panta</strong
+                  ><span
+                    >Fast settlement and broad access from the Panta
+                    stack.</span
+                  >
+                </div>
+              </li>
+              <li class="benefit-item">
+                <div class="benefit-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M4 8h16v9H9l-5 4V8Z" />
+                  </svg>
+                </div>
+                <div>
+                  <strong>Works right inside Telegram</strong
+                  ><span
+                    >Create markets without leaving your group
+                    conversation.</span
+                  >
+                </div>
+              </li>
+            </ul>
+          </section>
+
+          <section
+            class="info-section demo-section"
+            aria-labelledby="example-market-title"
+          >
+            <h2 id="example-market-title" class="section-heading">
+              Example market
+            </h2>
+            <div
+              class="market-preview-card"
+              aria-label="Example market preview"
+            >
+              <div class="preview-topline">
+                <span class="preview-tag">Example market</span>
+                <span class="preview-status">LIVE</span>
+              </div>
+              <p class="preview-question">
+                Will Bitcoin be above $100k by Dec 2026?
+              </p>
+              <div class="preview-prices">
+                <div class="price-pill yes-pill">
+                  <span>YES</span><strong>62%</strong>
+                </div>
+                <div class="price-pill no-pill">
+                  <span>NO</span><strong>38%</strong>
+                </div>
+              </div>
+              <div class="preview-bar-track" aria-hidden="true">
+                <span class="preview-bar yes-bar"></span>
+                <span class="preview-bar no-bar"></span>
+              </div>
+              <div class="preview-meta">Demo preview • Not live data</div>
+            </div>
+          </section>
+
+          <details class="help-panel">
+            <summary>How do I use this in my group?</summary>
+            <ol>
+              <li>Open this bot's chat in Telegram</li>
+              <li>Tap the bot's name at the top, then "Add to Group"</li>
+              <li>
+                Or: in any group you admin, go to Add Members and search for
+                @PantaPredictBot
+              </li>
+            </ol>
+          </details>
+
+          <button
+            id="landing-connect-btn"
+            class="btn-primary btn-large connect-wallet-cta"
+          >
+            Connect Wallet
+          </button>
+        </div>
+      </section>
+
+      <!-- Prediction Form (gated behind wallet connection) -->
+      <section id="form-page" class="page hidden">
+        <div class="form-container">
+          <h2 class="form-title">Create Market</h2>
+
+          <form id="create-form">
+            <label>
+              <span class="field-label">QUESTION</span>
+              <input
+                type="text"
+                id="question"
+                required
+                placeholder="Will Bitcoin reach $100k by end of 2026?"
+              />
+            </label>
+
+            <label>
+              <span class="field-label">RESOLUTION RULE</span>
+              <textarea
+                id="resolution_rule"
+                required
+                placeholder="How will this be resolved? (e.g., Bitcoin reaches $100,000 USD at any point before December 31, 2026, according to CoinMarketCap data)"
+              ></textarea>
+            </label>
+
+            <label>
+              <span class="field-label">SOURCES OF TRUTH</span>
+              <span class="field-hint">URLs, one per line</span>
+              <textarea
+                id="sources_of_truth"
+                required
+                placeholder="https://coinmarketcap.com&#10;https://coingecko.com"
+              ></textarea>
+            </label>
+
+            <label>
+              <span class="field-label">CATEGORY</span>
+              <select id="category" required>
+                <option value="">Loading categories...</option>
+              </select>
+            </label>
+
+            <label>
+              <span class="field-label">IMAGE</span>
+              <select id="image_select">
+                <option value="">Select an image</option>
+                <option
+                  value="https://images.unsplash.com/photo-1518546305927-5a555bb7020d?w=400"
+                >
+                  Bitcoin/Crypto
+                </option>
+                <option
+                  value="https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=400"
+                >
+                  Sports
+                </option>
+                <option
+                  value="https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=400"
+                >
+                  Politics
+                </option>
+                <option
+                  value="https://images.unsplash.com/photo-161197476270-ca1258634369?w=400"
+                >
+                  Technology
+                </option>
+              </select>
+              <input
+                type="url"
+                id="image_url"
+                placeholder="Or enter custom image URL"
+              />
+            </label>
+
+            <label>
+              <span class="field-label">END DATE</span>
+              <input type="date" id="end_date" required />
+            </label>
+
+            <label>
+              <span class="field-label">RESOLUTION DATE</span>
+              <input type="date" id="resolution_date" required />
+            </label>
+
+            <div id="quality-checks"></div>
+
+            <div class="form-actions">
+              <button type="button" id="check-btn" class="btn-secondary">
+                Check Quality
+              </button>
+              <button
+                type="submit"
+                id="connect-btn"
+                class="btn-primary"
+                disabled
+              >
+                Create Market
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- Market View -->
+      <section id="market-view" class="page hidden">
+        <div class="form-container">
+          <h2 class="form-title">Market Details</h2>
+          <div id="market-details"></div>
+          <button id="back-btn" class="btn-secondary">Back to Create</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <div class="loading-content">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading...</p>
       </div>
-    </section>
-  </main>
-
-  <!-- Loading Overlay -->
-  <div id="loading-overlay" class="loading-overlay hidden">
-    <div class="loading-content">
-      <div class="spinner"></div>
-      <p id="loading-text">Loading...</p>
     </div>
-  </div>
 
-  <!-- Toast Notifications -->
-  <div id="toast-container" class="toast-container"></div>
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
 
-  <!-- Mandatory per Panta API Terms of Use §6 — do not remove -->
-  <footer>Powered by Panta</footer>
+    <!-- Mandatory per Panta API Terms of Use §6 — do not remove -->
+    <footer>Powered by Panta</footer>
 
-  <script src="app.js"></script>
-</body>
+    <script src="app.js"></script>
+  </body>
 </html>
