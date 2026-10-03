@@ -230,7 +230,9 @@ async function connectWallet() {
       const resp = await window.solana.connect();
       connectedWallet = resp.publicKey.toString();
       updateWalletUI();
+      updateWalletUI();
       showLanding(false);
+      hideLoading();
       showToast("Wallet connected successfully!", "success");
       return;
     } catch (error) {
