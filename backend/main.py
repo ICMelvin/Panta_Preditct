@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from backend.models import BuildRequest, QuoteRequest, RegisterRequest
+from backend.models import BuildRequest, QualityCheckRequest, QuoteRequest, RegisterRequest
 from backend.panta_client import PantaAPIError, PantaClient
 from backend.quality_gate import run_quality_gate
 
@@ -77,10 +77,9 @@ class WalletSessionInit(BaseModel):
 
 
 @app.post("/api/quality-check")
-def quality_check(payload: QuoteRequest):
+def quality_check(payload: QualityCheckRequest):
     # Handle sources_of_truth array - take first source for quality check
-    source_field = payload.sources_of_truth[0] if payload.sources_of_truth and len(payload.sources_of_truth) > 0 else None
-    result = run_quality_gate(payload.question, source_field=source_field)
+    result = run_quality_gate(payload.question, source_field=payload.source)
     return result.to_dict()
 
 

@@ -22,6 +22,9 @@ class QuestionSubmission(BaseModel):
 class QuoteRequest(QuestionSubmission):
     pass
 
+class QualityCheckRequest(BaseModel):
+    question: str
+    source: Optional[str] = None
 
 class BuildRequest(BaseModel):
     create_id: str

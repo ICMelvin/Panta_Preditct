@@ -331,8 +331,7 @@ checkBtn.addEventListener("click", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         question,
-        resolution_rule: document.getElementById("resolution_rule").value,
-        sources_of_truth: sources,
+        source: sources.length > 0 ? sources[0] : null,
       }),
     });
     const data = await res.json();
